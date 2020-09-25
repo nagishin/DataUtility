@@ -9,13 +9,20 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
-class DataUtility(object):
+class Tool(object):
 
+    #-------------------------------------------------------------------------------
     # bybit約定履歴を取得
-    # start_ut / end_ut : UnixTimeで指定
-    #                     取得可能期間 : 2019-10-01以降かつ前日まで
-    # csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
-    #                     ファイルがない or 期間を満たしていない場合はrequest
+    #-------------------------------------------------------------------------------
+    # [params]
+    #  start_ut / end_ut : UnixTimeで指定
+    #                      取得可能期間 : 2019-10-01以降かつ前日まで
+    #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+    #                      ファイルがない or 期間を満たしていない場合はrequestで取得
+    #                      csvファイル保存
+    # [return]
+    #  DataFrame columns=['unixtime', 'side', 'size', 'price']
+    #-------------------------------------------------------------------------------
     @classmethod
     def get_trades_from_bybit(cls, start_ut, end_ut, csv_path='./bybit_trades.csv'):
         if os.path.isfile(csv_path):
@@ -74,12 +81,18 @@ class DataUtility(object):
         print('trades from request.')
         return df_concat
 
-
+    #-------------------------------------------------------------------------------
     # BitMEX OHLCVを取得
-    # start_ut / end_ut : UnixTimeで指定
-    # period            : 分を指定
-    # csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
-    #                     ファイルがない or 期間を満たしていない場合はrequest
+    #-------------------------------------------------------------------------------
+    # [params]
+    #  start_ut / end_ut : UnixTimeで指定
+    #  period            : 分を指定
+    #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+    #                      ファイルがない or 期間を満たしていない場合はrequestで取得
+    #                      csvファイル保存
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+    #-------------------------------------------------------------------------------
     @classmethod
     def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, csv_path='./bitmex_ohlcv.csv'):
         if os.path.isfile(csv_path):
@@ -142,18 +155,26 @@ class DataUtility(object):
         print('ohlcv from request.')
         return df
 
-
+    #-------------------------------------------------------------------------------
     # DataFrameのunixtime列からDateTimeIndexを設定
-    # df : unixtime(sec)列を含むDataFrame
+    #-------------------------------------------------------------------------------
+    # [params]
+    #  df : unixtime(sec)列を含むDataFrame
+    #-------------------------------------------------------------------------------
     @classmethod
     def set_unixtime_to_dateindex(cls, df):
         df['datetime'] = pd.to_datetime(df['unixtime'], unit='s', utc=True)
         df.set_index('datetime', inplace=True)
-    
 
+    #-------------------------------------------------------------------------------
     # 約定履歴をOHLCVにリサンプリング
-    # df     : DateTimeIndexとprice,size列を含むDataFrame
-    # period : リサンプルするタイムフレーム('1S'(秒), '5T'(分), '4H'(時), '1D'(日) etc.)
+    #-------------------------------------------------------------------------------
+    # [params]
+    #  df     : DateTimeIndexとprice,size列を含むDataFrame
+    #  period : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+    #-------------------------------------------------------------------------------
     @classmethod
     def trade_to_ohlcv(cls, df, period):
         df_org = df.copy()
@@ -168,11 +189,16 @@ class DataUtility(object):
         df_ohlcv['unixtime'] = df_ohlcv.unixtime.astype(np.int64)
         df_ohlcv = df_ohlcv[['unixtime', 'open', 'high', 'low', 'close', 'volume']]
         return df_ohlcv
-    
 
+    #-------------------------------------------------------------------------------
     # OHLCVを上位時間足にリサンプリング
-    # df     : DateTimeIndexとopen,high,low,close,volume列を含むDataFrame
-    # period : リサンプルするタイムフレーム('1S'(秒), '5T'(分), '4H'(時), '1D'(日) etc.)
+    #-------------------------------------------------------------------------------
+    # [params]
+    #  df     : DateTimeIndexとopen,high,low,close,volume列を含むDataFrame
+    #  period : リサンプルするタイムフレーム('1S'(秒), '5T'(分), '4H'(時), '1D'(日) etc.)
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+    #-------------------------------------------------------------------------------
     @classmethod
     def downsample_ohlcv(cls, df, period):
         df_org = df.copy()
