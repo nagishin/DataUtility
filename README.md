@@ -3,6 +3,9 @@
 ## インストール
 `pip install git+https://github.com/nagishin/DataUtility.git`
 
+## アンインストール
+`pip uninstall DataUtility`
+
 ## 使い方
 ```
 from datetime import datetime
