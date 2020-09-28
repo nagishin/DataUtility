@@ -70,6 +70,32 @@ df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, period=1, csv_
 #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
 #-------------------------------------------------------------------------------
 df_bitmex_ohlcv_1h = du.Tool.downsample_ohlcv(df_bitmex_ohlcv, period='1H')
+
+
+#-------------------------------------------------------------------------------
+# DataFrameの行を指定列の値範囲で絞り込み
+#-------------------------------------------------------------------------------
+# [params]
+#  df        : column列を含むDataFrame
+#  column    : 絞り込み判定を行う列名
+#  min_value : 絞り込み下限値
+#  max_value : 絞り込み上限値
+#-------------------------------------------------------------------------------
+divided_date = datetime.strptime('2020/09/03 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
+divided_ut   = int(divided_date.timestamp())
+
+df_filtered1 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', start_ut, divided_ut-1)
+df_filtered2 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', divided_ut, end_ut)
+
+
+#-------------------------------------------------------------------------------
+# DataFrameを結合
+#-------------------------------------------------------------------------------
+# [params]
+#  concat_dfs  : 結合するDataFrameリスト
+#  sort_column : 結合後にソートする列名
+#-------------------------------------------------------------------------------
+df_concat = concat_df([df_filtered1, df_filtered2], sort_column='unixtime')
 ```
 
 ## GitHub Gist

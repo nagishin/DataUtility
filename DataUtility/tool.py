@@ -220,3 +220,40 @@ class Tool(object):
     def set_unixtime_to_dateindex(cls, df):
         df['datetime'] = pd.to_datetime(df['unixtime'], unit='s', utc=True)
         df.set_index('datetime', inplace=True)
+
+    #---------------------------------------------------------------------------
+    # DataFrameの行を指定列の値範囲で絞り込み
+    #---------------------------------------------------------------------------
+    # [params]
+    #  df        : column列を含むDataFrame
+    #  column    : 絞り込み判定を行う列名
+    #  min_value : 絞り込み下限値
+    #  max_value : 絞り込み上限値
+    #---------------------------------------------------------------------------
+    @classmethod
+    def filter_df(cls, df, column, min_value, max_value):
+        if not column in df.columns:
+            print(f'DataFrame columns is not exist {column}.')
+            return
+        return df[((df[column] >= min_value) & (df[column] <= max_value))]
+
+    #---------------------------------------------------------------------------
+    # DataFrameを結合
+    #---------------------------------------------------------------------------
+    # [params]
+    #  concat_dfs  : 結合するDataFrameリスト
+    #  sort_column : 結合後にソートする列名
+    #---------------------------------------------------------------------------
+    @classmethod
+    def concat_df(cls, concat_dfs, sort_column=None):
+        if len(concat_dfs) < 2:
+            print(f'Concat DataFrame is not exist.')
+            return None
+        if not sort_column in concat_dfs[0].columns:
+            print(f'DataFrame columns is not exist {sort_column}.')
+            return
+        df_concat = pd.concat(concat_dfs)
+        if sort_column is not None:
+            df_concat.sort_values(by=sort_column, ascending=True, inplace=True)
+        df_concat.reset_index(drop=True, inplace=True)
+        return df_concat
