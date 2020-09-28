@@ -84,8 +84,8 @@ df_bitmex_ohlcv_1h = du.Tool.downsample_ohlcv(df_bitmex_ohlcv, period='1H')
 divided_date = datetime.strptime('2020/09/03 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
 divided_ut   = int(divided_date.timestamp())
 
-df_filtered1 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', start_ut, divided_ut-1)
-df_filtered2 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', divided_ut, end_ut)
+df_filtered1 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', min_value=start_ut, max_value=divided_ut-1)
+df_filtered2 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', min_value=divided_ut, max_value=end_ut)
 
 
 #-------------------------------------------------------------------------------
@@ -95,7 +95,7 @@ df_filtered2 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', divided_
 #  concat_dfs  : 結合するDataFrameリスト
 #  sort_column : 結合後にソートする列名
 #-------------------------------------------------------------------------------
-df_concat = concat_df([df_filtered1, df_filtered2], sort_column='unixtime')
+df_concat = du.Tool.concat_df([df_filtered1, df_filtered2], sort_column='unixtime')
 ```
 
 ## GitHub Gist
