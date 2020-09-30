@@ -146,7 +146,7 @@ class Tool(object):
         df = pd.DataFrame(
             OrderedDict(unixtime=t, open=o, high=h, low=l, close=c, volume=v)
         )
-        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] <= end_ut))]
         if len(df.index) == 0:
             return df
         df.reset_index(drop=True, inplace=True)
