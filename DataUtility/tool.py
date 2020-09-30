@@ -133,7 +133,7 @@ class Tool(object):
                 res.raise_for_status()
                 d = res.json()
                 t += d['t']; o += d['o']; h += d['h']; l += d['l']; c += d['c']; v += d['v'];
-                cur_time = to_time
+                cur_time = to_time + (period * 60 + 1)
                 time.sleep(request_interval)
             except Exception as e:
                 print(f'Get ohlcv failed.(retry:{retry_count})\n{traceback.format_exc()}')
@@ -146,7 +146,7 @@ class Tool(object):
         df = pd.DataFrame(
             OrderedDict(unixtime=t, open=o, high=h, low=l, close=c, volume=v)
         )
-        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] <= end_ut))]
+        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
         if len(df.index) == 0:
             return df
         df.reset_index(drop=True, inplace=True)
