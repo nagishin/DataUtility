@@ -90,8 +90,8 @@ class Tool(object):
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
-    #  period            : 分を指定
-    #  symbol            : 取得対象の通貨ペアシンボル名（デフォルトは XBTUSD）
+    #  period            : 分を指定 (1 or 5 or 60 or 1D)
+    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはXBTUSD)
     #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
@@ -122,7 +122,7 @@ class Tool(object):
             'resolution': str(period),
         }
 
-        t=[]; o=[]; h=[]; l=[]; c=[]; v=[];
+        t=[]; o=[]; h=[]; l=[]; c=[]; v=[]
         cur_time = start_ut
         add_time = period * 60 * 10000
         retry_count = 0
@@ -134,7 +134,7 @@ class Tool(object):
                 res = requests.get(url, params, timeout=10)
                 res.raise_for_status()
                 d = res.json()
-                t += d['t']; o += d['o']; h += d['h']; l += d['l']; c += d['c']; v += d['v'];
+                t += d['t']; o += d['o']; h += d['h']; l += d['l']; c += d['c']; v += d['v']
                 cur_time = to_time + (period * 60 + 1)
                 time.sleep(request_interval)
             except Exception as e:
