@@ -13,11 +13,12 @@ class Tool(object):
 
     #---------------------------------------------------------------------------
     # bybit約定履歴を取得
-    # (https://public.bybit.com/trading/BTCUSD/ より)
+    # (https://public.bybit.com/trading/:symbol/ より)
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
     #                      取得可能期間 : 2019-10-01以降かつ前日まで
+    #  symbol            : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
     #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
@@ -25,7 +26,7 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'side', 'size', 'price']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_trades_from_bybit(cls, start_ut, end_ut, csv_path='./bybit_trades.csv'):
+    def get_trades_from_bybit(cls, start_ut, end_ut, symbol='BTCUSD', csv_path='./bybit_trades.csv'):
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
@@ -48,7 +49,7 @@ class Tool(object):
         cur_dt = from_dt
         while cur_dt <= to_dt:
             try:
-                df = pd.read_csv(f'https://public.bybit.com/trading/BTCUSD/BTCUSD{cur_dt:%Y-%m-%d}.csv.gz',
+                df = pd.read_csv(f'https://public.bybit.com/trading/{symbol}/{symbol}{cur_dt:%Y-%m-%d}.csv.gz',
                                  compression='gzip',
                                  usecols=['timestamp', 'side', 'price', 'size'],
                                  dtype={'timestamp':'float', 'side':'str', 'price':'float', 'size':'int'})
@@ -89,8 +90,8 @@ class Tool(object):
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
-    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはXBTUSD)
     #  period            : 分を指定 (1 or 5 or 60 or 1D)
+    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはXBTUSD)
     #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
@@ -99,7 +100,7 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, symbol='XBTUSD', period=1, csv_path='./bitmex_ohlcv.csv', request_interval=0.5):
+    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path='./bitmex_ohlcv.csv', request_interval=0.5):
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
