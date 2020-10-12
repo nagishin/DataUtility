@@ -49,7 +49,8 @@ df_bybit_ohlcv = du.Tool.trade_to_ohlcv(df_bybit_trades, period='1T')
 #-------------------------------------------------------------------------------
 # [params]
 #  start_ut / end_ut : UnixTimeで指定
-#  period            : 分を指定
+#  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはXBTUSD)
+#  period            : 分を指定 (1 or 5 or 60 or 1D)
 #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
 #                      ファイルがない or 期間を満たしていない場合はrequestで取得
 #                      csvファイル保存 (None or 空文字は保存しない)
@@ -57,7 +58,7 @@ df_bybit_ohlcv = du.Tool.trade_to_ohlcv(df_bybit_trades, period='1T')
 # [return]
 #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
 #-------------------------------------------------------------------------------
-df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, period=1, csv_path='./bitmex_ohlcv.csv', request_interval=0.5)
+df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, symbol='XBTUSD', period=1, csv_path='./bitmex_ohlcv.csv', request_interval=0.5)
 
 
 #-------------------------------------------------------------------------------
