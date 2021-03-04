@@ -8,6 +8,7 @@ from pytz import utc, timezone
 from collections import OrderedDict
 import numpy as np
 import pandas as pd
+from inspect import currentframe
 
 class Tool(object):
 
@@ -259,3 +260,176 @@ class Tool(object):
             df_concat.sort_values(by=sort_column, ascending=True, inplace=True)
         df_concat.reset_index(drop=True, inplace=True)
         return df_concat
+
+    #---------------------------------------------------------------------------
+    # デバッグ用 オブジェクト整形出力
+    #---------------------------------------------------------------------------
+    # [params]
+    #  data        : 表示するオブジェクト
+    #  indent      : 配列, リスト要素などを表示するインデント (str)
+    #  print_limit : 配列, リストなどの表示上限数を指定 (0:全件表示)
+    #  print_type  : オブジェクトの型情報を出力するか (bool)
+    #  print_len   : 配列, リストなどの長さを出力するか (bool)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def debug_print(cls, data: object, print_limit: int = 0, indent: str = '  ', print_type: bool = False, print_len: bool = True) -> None:
+        if data is None:
+            return
+
+        name = {id(v):k for k,v in currentframe().f_back.f_locals.items()}.get(id(data), '???')
+        key_str = f'{name} = '
+
+        if isinstance(data, list):
+            print(key_str)
+            cls.__print_list(data, 0, indent, print_limit, print_type, print_len)
+        elif isinstance(data, dict):
+            print(key_str)
+            cls.__print_dict(data, 0, indent, print_limit, print_type, print_len)
+        elif isinstance(data, np.ndarray) or isinstance(data, pd.core.series.Series):
+            print(key_str)
+            cls.__print_array(data, 0, indent, print_limit, print_type, print_len)
+        elif isinstance(data, pd.core.frame.DataFrame):
+            print(key_str)
+            cls.__print_df(data, 0, indent, print_limit, print_type, print_len)
+        else:
+            key_str += f'{repr(data)}'
+            if print_type:
+                key_str += f' (type = {type(data)})'
+            print(key_str)
+
+    @classmethod
+    def __get_pre_print(cls, data: object, indent_count: int = 0, indent: str = '  ', print_limit: int = 0, print_type: bool = False, print_len: bool = True):
+        if data is None:
+            return
+
+        ret = {}
+        ret['top_indent'] = '' if indent_count < 1 else indent * indent_count
+
+        ret['disp_count'] = 0
+        data_length = 0
+        if isinstance(data, list) or isinstance(data, np.ndarray) or isinstance(data, pd.core.series.Series) or isinstance(data, pd.core.frame.DataFrame):
+            data_length = len(data)
+            ret['disp_count'] = data_length if print_limit is None or print_limit == 0 else min(data_length, print_limit)
+
+        tail_str = ''
+        if print_type or (print_len and data_length > 0):
+            tail_str += ' ('
+            if print_type:
+                tail_str += f'type = {type(data)}'
+            if len(tail_str) > 3:
+                tail_str += ', '
+            if print_len:
+                tail_str += f'len = {data_length}'
+            tail_str += ')'
+        ret['tail_str'] = tail_str
+
+        return ret
+
+    @classmethod
+    def __print_list(cls, data: list, indent_count: int = 0, indent: str = '  ', print_limit: int = 0, print_type: bool = False, print_len: bool = True) -> None:
+        if data is None:
+            return
+        if isinstance(data, list) == False:
+            return
+
+        info = cls.__get_pre_print(data, indent_count, indent, print_limit, print_type, print_len)
+        disp_count = info['disp_count']
+        top_indent = info['top_indent']
+        tail_str = info['tail_str']
+
+        print(f'{top_indent}[')
+
+        for i in range(disp_count):
+            if isinstance(data[i], list):
+                cls.__print_list(data[i], indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(data[i], dict):
+                cls.__print_dict(data[i], indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(data[i], np.ndarray) or isinstance(data[i], pd.core.series.Series):
+                cls.__print_array(data[i], indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(data[i], pd.core.frame.DataFrame):
+                cls.__print_df(data[i], indent_count+1, indent, print_limit, print_type, print_len)
+            else:
+                print(top_indent + indent + repr(data[i]) + ',')
+
+        if len(data) > disp_count:
+            print(top_indent + indent + '...')
+
+        print(f'{top_indent}],' + tail_str)
+
+    @classmethod
+    def __print_dict(cls, data: dict, indent_count: int = 0, indent: str = '  ', print_limit: int = 0, print_type: bool = False, print_len: bool = True) -> None:
+        if data is None:
+            return
+        if isinstance(data, dict) == False:
+            return
+
+        info = cls.__get_pre_print(data, indent_count, indent, print_limit, print_type, print_len)
+        disp_count = info['disp_count']
+        top_indent = info['top_indent']
+        tail_str = info['tail_str']
+
+        print(top_indent + '{')
+
+        for k,v in data.items():
+            key_str = top_indent + indent + repr(k) + ' : '
+            if isinstance(v, list):
+                print(key_str)
+                cls.__print_list(v, indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(v, dict):
+                print(key_str)
+                cls.__print_dict(v, indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(v, np.ndarray) or isinstance(v, pd.core.series.Series):
+                print(key_str)
+                cls.__print_array(v, indent_count+1, indent, print_limit, print_type, print_len)
+            elif isinstance(v, pd.core.frame.DataFrame):
+                print(key_str)
+                cls.__print_df(v, indent_count+1, indent, print_limit, print_type, print_len)
+            else:
+                print(key_str + repr(v) + ',')
+
+        print(top_indent + '},' + tail_str)
+
+    @classmethod
+    def __print_array(cls, data: object, indent_count: int = 0, indent: str = '  ', print_limit: int = 0, print_type: bool = False, print_len: bool = True) -> None:
+        if data is None:
+            return
+        if isinstance(data, np.ndarray) == False and isinstance(data, pd.core.series.Series) == False:
+            return
+
+        info = cls.__get_pre_print(data, indent_count, indent, print_limit, print_type, print_len)
+        disp_count = info['disp_count']
+        top_indent = info['top_indent']
+        tail_str = info['tail_str']
+
+        print(repr(data[:disp_count]))
+        if len(data) > disp_count:
+            print('...')
+
+        if len(tail_str) > 0:
+            print(tail_str)
+
+    @classmethod
+    def __print_df(cls, data: object, indent_count: int = 0, indent: str = '  ', print_limit: int = 0, print_type: bool = False, print_len: bool = True) -> None:
+        if data is None:
+            return
+        if isinstance(data, pd.core.frame.DataFrame) == False:
+            return
+
+        info = cls.__get_pre_print(data, indent_count, indent, print_limit, print_type, print_len)
+        disp_count = info['disp_count']
+        top_indent = info['top_indent']
+        tail_str = info['tail_str']
+
+        print(data.head(disp_count))
+        if len(data.index) > disp_count:
+            print('...')
+
+        tail_str = ''
+        if print_type or print_len:
+            tail_str += '('
+            if print_type:
+                tail_str += f'type = {type(data)}'
+            if print_len:
+                tail_str += f', table = row:{len(data.index)} * col:{len(data.columns)}'
+            tail_str += ')'
+            print(tail_str)
