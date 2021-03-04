@@ -98,6 +98,19 @@ df_filtered2 = du.Tool.filter_df(df_bitmex_ohlcv_1h, column='unixtime', min_valu
 #  sort_column : 結合後にソートする列名
 #-------------------------------------------------------------------------------
 df_concat = du.Tool.concat_df([df_filtered1, df_filtered2], sort_column='unixtime')
+
+
+#---------------------------------------------------------------------------
+# デバッグ用 オブジェクト整形出力
+#---------------------------------------------------------------------------
+# [params]
+#  data        : 表示するオブジェクト (int, float, str, list, dict, DataFrame, ndarray etc...)
+#  indent      : 配列, リスト要素などを表示するインデント (str)
+#  print_limit : 配列, リストなどの表示上限数を指定 (0:全件表示)
+#  print_type  : オブジェクトの型情報を出力するか (bool)
+#  print_len   : 配列, リストなどの長さを出力するか (bool)
+#---------------------------------------------------------------------------
+du.Tool.debug_print(data, print_limit=5, print_type=False, print_len=True)
 ```
 
 ## GitHub Gist
