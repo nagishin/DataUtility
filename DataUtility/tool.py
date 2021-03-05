@@ -35,7 +35,7 @@ class Tool(object):
                     if len(df.index) > 0:
                         ut = df['unixtime'].values
                         if ((start_ut >= ut[0]) & (end_ut <= ut[-1])):
-                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] <= end_ut))]
+                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
                             df.reset_index(drop=True, inplace=True)
                             print('trades from csv.')
                             return df
@@ -80,7 +80,7 @@ class Tool(object):
                 os.makedirs(csv_dir)
             df_concat.to_csv(csv_path, header=True, index=False)
 
-        df_concat = df_concat[((df_concat['unixtime'] >= start_ut) & (df_concat['unixtime'] <= end_ut))]
+        df_concat = df_concat[((df_concat['unixtime'] >= start_ut) & (df_concat['unixtime'] < end_ut))]
 
         print('trades from request.')
         return df_concat
@@ -110,7 +110,7 @@ class Tool(object):
                         ut = df['unixtime'].values
                         p = ut[1] - ut[0]
                         if ((start_ut >= ut[0]) & (end_ut <= ut[-1]) & (p == period * 60)):
-                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] <= end_ut))]
+                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
                             df.reset_index(drop=True, inplace=True)
                             print('ohlcv from csv.')
                             return df
@@ -149,7 +149,7 @@ class Tool(object):
         df = pd.DataFrame(
             OrderedDict(unixtime=t, open=o, high=h, low=l, close=c, volume=v)
         )
-        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] <= end_ut))]
+        df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
         if len(df.index) == 0:
             return df
         df.reset_index(drop=True, inplace=True)
@@ -433,3 +433,308 @@ class Tool(object):
                 tail_str += f', table = row:{len(data.index)} * col:{len(data.columns)}'
             tail_str += ')'
             print(tail_str)
+
+    #---------------------------------------------------------------------------
+    # 指定値切り捨て
+    #---------------------------------------------------------------------------
+    # [params]
+    #  value       : 切り捨てするオブジェクト (int, float, list, ndarray, Series, etc.)
+    #  round_base  : 切り捨てする基準値 (int)
+    # [return]
+    #  valueを切り捨てしたオブジェクト (エラーの場合はNoneを返す)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def round_down(cls, value: object, round_base: int) -> object:
+        try:
+            if isinstance(round_base, (int, float)) == False:
+                return None
+            if round_base < 1:
+                return None
+            round = int(round_base)
+
+            if isinstance(value, (int, float)):
+                return (int(value) // round) * round
+
+            if isinstance(value, list):
+                return [(int(v) // round) * round for v in value]
+
+            if isinstance(value, np.ndarray):
+                f = np.frompyfunc(lambda x, y: (int(x) // y) * y, 2, 1)
+                return f(value, round)
+
+            if isinstance(value, pd.core.series.Series):
+                return value.map(lambda x: (int(x) // round) * round)
+
+            if type(value) is pd.core.indexes.datetimes.DatetimeIndex:
+                tz = value[0].tzinfo
+                if tz is None:
+                    return value.map(lambda x: datetime.utcfromtimestamp(x.value // (round * 10**9) * round))
+                else:
+                    return value.map(lambda x: datetime.fromtimestamp(x.value // (round * 10**9) * round, tz=tz))
+
+            return None
+
+        except Exception:
+            return None
+
+    #---------------------------------------------------------------------------
+    # 指定値切り上げ
+    #---------------------------------------------------------------------------
+    # [params]
+    #  value       : 切り上げするオブジェクト (int, float, list, ndarray, Series, etc.)
+    #  round_base  : 切り上げする基準値 (int)
+    # [return]
+    #  valueを切り上げしたオブジェクト (エラーの場合はNoneを返す)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def round_up(cls, value: object, round_base: int) -> object:
+        try:
+            if isinstance(round_base, (int, float)) == False:
+                return None
+            if round_base < 1:
+                return None
+            round = int(round_base)
+
+            if isinstance(value, (int, float)):
+                return (int(value) // round) * round + round
+
+            if isinstance(value, list):
+                return [(int(v) // round) * round + round for v in value]
+
+            if isinstance(value, np.ndarray):
+                f = np.frompyfunc(lambda x, y: (int(x) // y) * y + y, 2, 1)
+                return f(value, round)
+
+            if isinstance(value, pd.core.series.Series):
+                return value.map(lambda x: (int(x) // round) * round + round)
+
+            if type(value) is pd.core.indexes.datetimes.DatetimeIndex:
+                tz = value[0].tzinfo
+                if tz is None:
+                    return value.map(lambda x: datetime.utcfromtimestamp(x.value // (round * 10**9) * round + round))
+                else:
+                    return value.map(lambda x: datetime.fromtimestamp(x.value // (round * 10**9) * round + round, tz=tz))
+
+            return None
+
+        except Exception:
+            return None
+
+    #---------------------------------------------------------------------------
+    # datetime変換
+    #---------------------------------------------------------------------------
+    # [params]
+    #  value : datetime変換するオブジェクト (str, list, ndarray, Series, etc.)
+    #  fmt   : 日付フォーマット (str) 省略可
+    # [return]
+    #  valueをdatetime変換したオブジェクト (エラーの場合はNoneを返す)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def str_to_datetime(cls, value: object, fmt: str = '%Y-%m-%dT%H:%M:%S.%fZ') -> object:
+        try:
+            if isinstance(fmt, str) == False or len(fmt) < 10:
+                return None
+
+            if type(value) is str:
+                dt, ret_fmt = cls.__str_to_datetime(value, fmt)
+                return dt
+
+            if len(value) < 1:
+                return None
+
+            if isinstance(value, list) and isinstance(value[0], str):
+                dt, ret_fmt = cls.__str_to_datetime(value[0], fmt)
+                if dt == None:
+                    return None
+                return [cls.__str_to_datetime(v, ret_fmt)[0] for v in value]
+
+            elif isinstance(value, np.ndarray) and isinstance(value[0], str):
+                df = pd.DataFrame({'str_dt': value})
+                df['datetime'] = pd.to_datetime(df['str_dt'])
+                return df['datetime'].values
+
+            elif isinstance(value, pd.core.indexes.base.Index):
+                if isinstance(value[0], str):
+                    return pd.to_datetime(value)
+                if isinstance(value[0], datetime):
+                    return value
+
+            elif isinstance(value, pd.core.series.Series):
+                if isinstance(value.iloc[0], str):
+                    return pd.to_datetime(value)
+                if isinstance(value.iloc[0], datetime):
+                    return value
+
+            return None
+
+        except Exception:
+            return None
+
+    @classmethod
+    def __str_to_datetime(cls, str_dt, fmt):
+        try:
+            cnv_str = str_dt
+            cnv_fmt = fmt
+            dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+            if dt != None:
+                return dt, cnv_fmt
+
+            if len(cnv_str) == 19:
+                cnv_str = str_dt + '.000Z'
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt
+                cnv_fmt = '%Y/%m/%d %H:%M:%S'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+            if len(cnv_str) == 24:
+                cnv_str = str_dt
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S%z'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt
+                cnv_fmt = '%Y/%m/%d %H:%M:%S%z'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+            if len(cnv_str) > 24:
+                cnv_str = str_dt
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%fZ'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_fmt = '%Y/%m/%d %H:%M:%S.%f'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%fZ%z'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%f%z'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_fmt = '%Y/%m/%d %H:%M:%S.%f%z'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+            if len(cnv_str) > 22:
+                cnv_str = str_dt[:23]
+                cnv_fmt = '%Y-%m-%dT%H:%M:%S.%f'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+                cnv_str = str_dt[:23]
+                cnv_fmt = '%Y/%m/%d %H:%M:%S.%f'
+                dt = cls.__convert_str_to_dt(cnv_str, cnv_fmt)
+                if dt != None:
+                    return dt, cnv_fmt
+
+        except Exception:
+            return None, fmt
+
+    @classmethod
+    def __convert_str_to_dt(cls, str_dt, fmt):
+        try:
+            dt = datetime.strptime(str_dt, fmt)
+            return dt
+        except ValueError:
+            pass
+        return None
+
+    #---------------------------------------------------------------------------
+    # unixtime変換
+    #---------------------------------------------------------------------------
+    # [params]
+    #  value : unixtime変換するオブジェクト (str, datetime, list, ndarray, Series, etc.)
+    # [return]
+    #  valueをunixtime変換したオブジェクト (エラーの場合は0を返す)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def to_unixtime(cls, value: object) -> object:
+        try:
+            if isinstance(value, str):
+                dt = cls.str_to_datetime(value)
+                if dt is None:
+                    return 0
+                return dt.timestamp()
+
+            if isinstance(value, datetime):
+                return value.timestamp()
+
+            if isinstance(value, list):
+                if isinstance(value[0], str):
+                    dt = cls.str_to_datetime(value)
+                    if dt is None:
+                        return 0
+                    return [d.timestamp() for d in dt]
+
+                if isinstance(value[0], datetime):
+                    return [d.timestamp() for d in value]
+
+            if isinstance(value, np.ndarray):
+                if isinstance(value[0], str):
+                    dt = str_to_datetime(value)
+                    if dt is None:
+                        return 0
+                    return np.array([d.timestamp() for d in dt])
+
+                if isinstance(value[0], datetime):
+                    return np.array([d.timestamp() for d in value])
+
+            if isinstance(value, pd.core.indexes.base.Index):
+                if isinstance(value[0], str):
+                    dt = cls.str_to_datetime(value)
+                    if dt is None:
+                        return 0
+                    return dt.map(lambda x: x.timestamp())
+
+                if isinstance(value[0], datetime):
+                    return value.map(lambda x: x.timestamp())
+
+            if isinstance(value, pd.core.series.Series):
+                if isinstance(value.iloc[0], str):
+                    dt = cls.str_to_datetime(value)
+                    if dt is None:
+                        return 0
+                    return dt.map(lambda x: x.timestamp())
+
+                if isinstance(value.iloc[0], datetime):
+                    return value.map(lambda x: x.timestamp())
+
+            if isinstance(value, pd.core.indexes.datetimes.DatetimeIndex) or \
+               isinstance(value.iloc[0], pd._libs.tslib.Timestamp):
+                return value.astype(np.int64) // 10**9
+
+            return 0
+
+        except Exception:
+            return 0
