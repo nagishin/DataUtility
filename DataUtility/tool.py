@@ -702,7 +702,7 @@ class Tool(object):
 
             if isinstance(value, np.ndarray):
                 if isinstance(value[0], str):
-                    dt = str_to_datetime(value)
+                    dt = cls.str_to_datetime(value)
                     if dt is None:
                         return 0
                     return np.array([d.timestamp() for d in dt])
