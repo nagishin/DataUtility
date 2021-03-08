@@ -864,7 +864,7 @@ class Tool(object):
     #  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
     #---------------------------------------------------------------------------
     @classmethod
-    def get_executions_from_bybit(cls, api_key: str, api_secret: str, symbol: str = 'BTCUSD', from_ut: float=0) -> DataFrame:
+    def get_executions_from_bybit(cls, api_key: str, api_secret: str, symbol: str = 'BTCUSD', from_ut: float=0) -> pd.DataFrame:
         try:
             # pybybit APIインスタンス生成
             api = [api_key, api_secret]
