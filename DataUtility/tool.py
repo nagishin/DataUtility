@@ -866,7 +866,7 @@ class Tool(object):
     #  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
     #---------------------------------------------------------------------------
     @classmethod
-    def get_executions_from_bybit(cls, api_key: str, api_secret: str, testnet: bool = False, symbol: str = 'BTCUSD', from_ut: float = 0) -> pd.DataFrame:
+    def get_executions_from_bybit(cls, api_key: str, api_secret: str, testnet: bool = False, symbol: str = 'BTCUSD', from_ut: int = 0) -> pd.DataFrame:
         try:
             # pybybit APIインスタンス生成
             api = [api_key, api_secret]
@@ -876,7 +876,7 @@ class Tool(object):
             lst_execs = [] # 取得した約定履歴リスト
             while True:
                 try:
-                    ret = bybit_api.rest.inverse.private_execution_list(symbol=symbol, start_time=from_ut - 86400 * 7, page=get_start, limit=200)
+                    ret = bybit_api.rest.inverse.private_execution_list(symbol=symbol, start_time=int(from_ut) - 86400 * 7, page=get_start, limit=200)
                     ret = ret.json()
                     rl_status = int(ret['rate_limit_status'])
                     rl_reset = float(ret['rate_limit_reset_ms']) / 1000
