@@ -1039,6 +1039,7 @@ class Tool(object):
             df_execs['pl'] = lst_pl
             df_execs = df_execs[['exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee', 'pos_size', 'val_per_qty', 'pl']]
             df_execs = df_execs[(df_execs['exec_time'] >= from_ut)]
+            df_execs.reset_index(drop=True, inplace=True)
             df_execs['datetime'] = pd.to_datetime(df_execs['exec_time'].astype(float), unit='s', utc=True)
             df_execs = df_execs.set_index('datetime')
             df_execs.index = df_execs.index.tz_convert('Asia/Tokyo')
