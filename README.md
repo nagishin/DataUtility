@@ -165,11 +165,12 @@ dt = du.Tool.to_unixtime(value)
 #---------------------------------------------------------------------------
 # [params]
 #  api_key / api_secret : API Key/SECRET
+#  testnet              : 接続先(True:testnet, False:realnet)
 #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
 #---------------------------------------------------------------------------
 api_key = 'your api key',
 api_secret = 'your api secret'
-du.Tool.print_status_from_bybit(api_key, api_secret, symbol='BTCUSD')
+du.Tool.print_status_from_bybit(api_key, api_secret, testnet=False, symbol='BTCUSD')
 
 
 #---------------------------------------------------------------------------
@@ -177,6 +178,7 @@ du.Tool.print_status_from_bybit(api_key, api_secret, symbol='BTCUSD')
 #---------------------------------------------------------------------------
 # [params]
 #  api_key / api_secret : API Key/Secret
+#  testnet              : 接続先(True:testnet, False:realnet)
 #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
 #  from_ut              : 取得開始UnixTime
 # [return]
@@ -185,7 +187,7 @@ du.Tool.print_status_from_bybit(api_key, api_secret, symbol='BTCUSD')
 api_key = 'your api key',
 api_secret = 'your api secret'
 from_ut = du.Tool.to_unixtime('2021/01/01 00:00:00')
-df_execs = du.Tool.get_executions_from_bybit(api_key, api_secret, symbol='BTCUSD', from_ut=from_ut)
+df_execs = du.Tool.get_executions_from_bybit(api_key, api_secret, testnet=False, symbol='BTCUSD', from_ut=from_ut)
 ```
 
 ## GitHub Gist

@@ -746,14 +746,15 @@ class Tool(object):
     #---------------------------------------------------------------------------
     # [params]
     #  api_key / api_secret : API Key/SECRET
+    #  testnet              : 接続先(True:testnet, False:realnet)
     #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
     #---------------------------------------------------------------------------
     @classmethod
-    def print_status_from_bybit(cls, api_key: str, api_secret: str, symbol: str='BTCUSD') -> None:
+    def print_status_from_bybit(cls, api_key: str, api_secret: str, testnet: bool=False, symbol: str='BTCUSD') -> None:
         try:
             # pybybit APIインスタンス生成
             api = [api_key, api_secret]
-            bybit_api = pybybit.API(*api, testnet=False)
+            bybit_api = pybybit.API(*api, testnet=testnet)
             # timestamp
             now_time = datetime.now(timezone('Asia/Tokyo')).strftime('%Y/%m/%d %H:%M:%S')
             msg = f'<STATUS> {symbol} {now_time}\n'
@@ -858,17 +859,18 @@ class Tool(object):
     #---------------------------------------------------------------------------
     # [params]
     #  api_key / api_secret : API Key/Secret
+    #  testnet              : 接続先(True:testnet, False:realnet)
     #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
     #  from_ut              : 取得開始UnixTime
     # [return]
     #  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
     #---------------------------------------------------------------------------
     @classmethod
-    def get_executions_from_bybit(cls, api_key: str, api_secret: str, symbol: str = 'BTCUSD', from_ut: float=0) -> pd.DataFrame:
+    def get_executions_from_bybit(cls, api_key: str, api_secret: str, testnet: bool = False, symbol: str = 'BTCUSD', from_ut: float = 0) -> pd.DataFrame:
         try:
             # pybybit APIインスタンス生成
             api = [api_key, api_secret]
-            bybit_api = pybybit.API(*api, testnet=False)
+            bybit_api = pybybit.API(*api, testnet=testnet)
 
             get_start = 0  # 期間内の取得開始レコード
             lst_execs = [] # 取得した約定履歴リスト
