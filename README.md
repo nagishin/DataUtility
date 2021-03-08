@@ -158,6 +158,34 @@ dt = du.Tool.str_to_datetime(value)
 #  valueをunixtime変換したオブジェクト (エラーの場合は0を返す)
 #---------------------------------------------------------------------------
 dt = du.Tool.to_unixtime(value)
+
+
+#---------------------------------------------------------------------------
+# bybit状態取得
+#---------------------------------------------------------------------------
+# [params]
+#  api_key / api_secret : API Key/SECRET
+#  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+#---------------------------------------------------------------------------
+api_key = 'your api key',
+api_secret = 'your api secret'
+du.Tool.print_status_from_bybit(api_key, api_secret, symbol='BTCUSD')
+
+
+#---------------------------------------------------------------------------
+# bybit 自注文約定履歴に損益計算を付加して取得
+#---------------------------------------------------------------------------
+# [params]
+#  api_key / api_secret : API Key/Secret
+#  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+#  from_ut              : 取得開始UnixTime
+# [return]
+#  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
+#---------------------------------------------------------------------------
+api_key = 'your api key',
+api_secret = 'your api secret'
+from_ut = du.Tool.to_unixtime('2021/01/01 00:00:00')
+df_execs = du.Tool.get_executions_from_bybit(api_key, api_secret, symbol='BTCUSD', from_ut=from_ut)
 ```
 
 ## GitHub Gist

@@ -2,6 +2,7 @@
 import os
 import time
 import requests
+import json
 import traceback
 from datetime import datetime, timedelta
 from pytz import utc, timezone
@@ -9,6 +10,7 @@ from collections import OrderedDict
 import numpy as np
 import pandas as pd
 from inspect import currentframe
+import pybybit
 
 class Tool(object):
 
@@ -738,3 +740,309 @@ class Tool(object):
 
         except Exception:
             return 0
+
+    #---------------------------------------------------------------------------
+    # bybit状態取得
+    #---------------------------------------------------------------------------
+    # [params]
+    #  api_key / api_secret : API Key/SECRET
+    #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+    #---------------------------------------------------------------------------
+    @classmethod
+    def print_status_from_bybit(cls, api_key: str, api_secret: str, symbol: str='BTCUSD') -> None:
+        try:
+            # pybybit APIインスタンス生成
+            api = [api_key, api_secret]
+            bybit_api = pybybit.API(*api, testnet=False)
+            # timestamp
+            now_time = datetime.now(timezone('Asia/Tokyo')).strftime('%Y/%m/%d %H:%M:%S')
+            msg = f'<STATUS> {symbol} {now_time}\n'
+
+            # 価格
+            tic = bybit_api.rest.inverse.public_tickers(symbol=symbol)
+            tic = tic.json()['result']
+            if len(tic) > 0:
+                tic = tic[0]
+                ltp = float(tic['last_price'])
+                bid = float(tic['bid_price'])
+                ask = float(tic['ask_price'])
+                mark = float(tic['mark_price'])
+                idx = float(tic['index_price'])
+                vol = int(tic['volume_24h'])
+                oi = int(tic['open_interest'])
+                fr = float(tic['funding_rate'])
+                msg += f'[price]\n'
+                msg += f'  ltp        : {ltp:.1f}\n'
+                msg += f'  bid        : {bid:.1f}\n'
+                msg += f'  ask        : {ask:.1f}\n'
+                msg += f'  mark       : {mark:.2f}\n'
+                msg += f'  index      : {idx:.2f}\n'
+                msg += f'  vol_24     : {vol:,}\n'
+                msg += f'  oi         : {oi:,}\n'
+                msg += f'  fr         : {fr:.4%}\n'
+
+            # 残高&ポジション
+            pos = bybit_api.rest.inverse.private_position_list(symbol=symbol)
+            pos = pos.json()['result']
+            wlt = float(pos['wallet_balance'])
+            side = pos['side']
+            size = int(pos['size'])
+            margin = float(pos['position_margin'])
+            entry = float(pos['entry_price'])
+            sl = float(pos['stop_loss'])
+            tp = float(pos['take_profit'])
+            ts = float(pos['trailing_stop'])
+            liq = float(pos['liq_price'])
+            lvr = float(pos['effective_leverage'])
+            pnl = float(pos['unrealised_pnl'])
+            used = margin + float(pos['occ_closing_fee']) + float(pos['occ_funding_fee']) - pnl
+            avl = wlt - used
+            price_pnl = 0
+            if pos['side'] == 'Buy':
+                price_pnl = ltp - entry
+            elif pos['side'] == 'Sell':
+                price_pnl = entry - ltp
+            msg += f'[position]\n'
+            msg += f'  side       : {side}\n'
+            msg += f'  size       : {size:,} ({margin:.8f})\n'
+            msg += f'  avr_entry  : {entry:.2f}' + f' ({price_pnl:+.2f})\n'
+            msg += f'  stop_loss  : {sl:.1f}\n'
+            msg += f'  take_profit: {tp:.1f}\n'
+            msg += f'  trailing   : {ts:.1f}\n'
+            msg += f'  liq_price  : {liq:.1f}\n'
+            msg += f'  unrealised : {pnl:.8f}\n'
+            msg += f'  leverage   : {lvr:.2f}\n'
+            msg += f'[balance]\n'
+            msg += f'  wallet     : {wlt:.8f}\n'
+            msg += f'  available  : {avl:.8f}\n'
+
+            # オープンオーダー
+            odr = bybit_api.rest.inverse.private_order_list(symbol=symbol, order_status='New,PartiallyFilled')
+            odr = odr.json()['result']
+            if 'data' in odr and len(odr['data']) > 0:
+                msg += f'[open order]\n'
+
+            for o in odr['data']:
+                if o['order_status'] == 'New':
+                    os = '[New    ]:'
+                elif o['order_status'] == 'PartiallyFilled':
+                    os = '[Partial]:'
+                else:
+                    os = '[Other  ]:'
+                price = float(o['price'])
+                qty = int(o['qty'])
+                cum = int(o['cum_exec_qty'])
+                msg += '  ' + os + o['order_type'] + o['side'] + f'  [price]:{price:.1f}  [qty]:{cum}/{qty}'
+
+                utc_dt = datetime.datetime.strptime(o['updated_at'] + '+0000', '%Y-%m-%dT%H:%M:%S.%fZ%z')
+                jst_dt = utc_dt.astimezone(timezone('Asia/Tokyo'))
+                msg += '  [time]:' + jst_dt.strftime('%Y/%m/%d %H:%M:%S')
+
+                opt = ''
+                if 'time_in_force' in o and len(o['time_in_force']) > 0:
+                    opt += o['time_in_force']
+                if 'ext_fields' in o and 'reduce_only' in o['ext_fields'] and o['ext_fields']['reduce_only']:
+                    if len(opt) > 0:
+                        opt += ','
+                    opt += 'ReduceOnly'
+                if len(opt) > 0:
+                    msg += '  [option]:' + opt
+                msg += '\n'
+            print(msg)
+
+        except Exception as e:
+            raise Exception('get_status failed.' + str(e))
+
+    #---------------------------------------------------------------------------
+    # bybit 自注文約定履歴に損益計算を付加して取得
+    #---------------------------------------------------------------------------
+    # [params]
+    #  api_key / api_secret : API Key/Secret
+    #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+    #  from_ut              : 取得開始UnixTime
+    # [return]
+    #  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_executions_from_bybit(cls, api_key: str, api_secret: str, symbol: str = 'BTCUSD', from_ut: float=0) -> DataFrame:
+        try:
+            # pybybit APIインスタンス生成
+            api = [api_key, api_secret]
+            bybit_api = pybybit.API(*api, testnet=False)
+
+            get_start = 0  # 期間内の取得開始レコード
+            lst_execs = [] # 取得した約定履歴リスト
+            while True:
+                try:
+                    ret = bybit_api.rest.inverse.private_execution_list(symbol=symbol, start_time=from_ut - 86400 * 7, page=get_start, limit=200)
+                    ret = ret.json()
+                    rl_status = int(ret['rate_limit_status'])
+                    rl_reset = float(ret['rate_limit_reset_ms']) / 1000
+                    rl_limit = int(ret['rate_limit'])
+                    execs = ret['result']
+
+                    if not ('trade_list' in execs):
+                        break
+                    execs = execs['trade_list']
+                    if execs == None or len(execs) < 1:
+                        break
+
+                    lst = [[e['exec_id'], e['exec_time'], e['exec_type'], e['order_type'], e['side'], e['exec_price'], e['exec_qty'], e['exec_value'], e['fee_rate'], e['exec_fee']] for e in execs]
+                    lst_execs += lst
+
+                    msg = 'Success API request. last:{} execs:{} RateLimit:{}/{} Reset:{}'.format(lst_execs[-1][1], len(lst_execs), rl_status, rl_limit, rl_reset)
+                    print(msg)
+
+                    get_start += 1
+
+                    # 安全のため、リクエスト可能数が5より小さくなったら10秒間sleep
+                    if rl_status < 5:
+                        to_sleep = 10
+                        msg = f'Wait {to_sleep}[sec] for RateLimit...'
+                        print(msg)
+                        time.sleep(to_sleep)
+                    else:
+                        time.sleep(0.5)
+
+                except Exception as e:
+                    raise Exception(e)
+
+            # DataDrame生成
+            df_execs = pd.DataFrame(lst_execs, columns=['exec_id', 'exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee'])
+            df_execs['exec_time'] = df_execs['exec_time'].astype(float)
+            df_execs['exec_price'] = df_execs['exec_price'].astype(float)
+            df_execs['exec_qty'] = df_execs['exec_qty'].astype(int)
+            df_execs['exec_value'] = df_execs['exec_value'].astype(float)
+            df_execs['fee_rate'] = df_execs['fee_rate'].astype(float)
+            df_execs['exec_fee'] = df_execs['exec_fee'].astype(float)
+            # exec_time昇順ソート
+            df_execs.sort_values(by='exec_time', ascending=True, inplace=True)
+            # 重複行削除
+            df_execs.drop_duplicates(keep='last', inplace=True)
+            df_execs.reset_index(drop=True, inplace=True)
+
+            # ポジション取得
+            pos = bybit_api.rest.inverse.private_position_list(symbol=symbol)
+            pos = pos.json()['result']
+            side = pos['side']
+            size = int(pos['size'])
+            cur_size = size if side == 'Buy' else -size
+
+            # 現在のポジションと約定履歴よりポジション推移計算
+            calc_pos = np.where(df_execs['exec_type'] == 'Trade', df_execs['exec_qty'], 0)
+            calc_pos = calc_pos * np.where(df_execs['side']=='Sell', 1, -1)
+            # 現在のポジションを追加し、反転して累積和を計算
+            calc_pos = np.append(calc_pos, [cur_size])
+            calc_pos = calc_pos[::-1]
+            calc_pos = calc_pos.cumsum()
+            calc_pos = calc_pos[::-1]
+            calc_pos = calc_pos[:-1]
+            calc_pos = np.round(calc_pos, 8)
+            df_execs['sum_size'] = calc_pos
+
+            # from以前でノーポジション or ドテンを検出して集計基準とする
+            pre_idx = 0
+            pre_idxes = np.where(df_execs['exec_time'] <= from_ut)[0]
+            if len(pre_idxes) > 0:
+                pre_idx = max(pre_idxes)
+
+            base_idx = -1
+            base_pos = 0
+            base_avr = 0
+            for i in range(pre_idx, -1, -1):
+                if calc_pos[i] == 0.0:
+                    base_idx = i
+                    break
+                if i > 0 and calc_pos[i] * calc_pos[i-1] < 0.0:
+                    base_idx = i
+                    base_pos = calc_pos[i]
+                    base_avr = df_execs['price'].values[i]
+                    break
+
+            if base_idx < 0:
+                print('Base position not found 7 days before the from_ut.')
+
+            # 集計基準から約定履歴を判定し、ポジション推移を求める
+            df_execs = df_execs.iloc[base_idx:, :]
+            df_execs.reset_index(drop=True, inplace=True)
+
+            # 約定履歴より損益推移計算
+            lst_pl       = []
+            lst_sum_size = []
+            lst_avr_cost = []
+            lst_pl   = []
+            pl       = 0
+            sum_size = base_pos
+            avr_cost = base_avr
+            np_type  = df_execs['exec_type'].values
+            np_side  = df_execs['side'].values
+            np_size  = df_execs['exec_qty'].values
+            np_cost  = df_execs['exec_value'].values
+            np_fee   = df_execs['exec_fee'].values
+
+            for i in range(df_execs.shape[0]):
+                i_size = int(np_size[i])
+                i_cost = float(np_cost[i])
+                i_fee = float(np_fee[i])
+
+                # Fundingの場合
+                if np_type[i] == 'Funding':
+                    # 手数料計算
+                    pl = -i_fee
+
+                # Tradeの場合
+                else:
+                    # 建玉積み増し
+                    if sum_size == 0.0 or \
+                        (sum_size > 0.0 and np_side[i] == 'Buy') or \
+                        (sum_size < 0.0 and np_side[i] == 'Sell'):
+                        temp_value = avr_cost * sum_size
+                        if np_side[i] == 'Buy':
+                            temp_value += i_cost
+                            # 建玉更新
+                            sum_size += i_size
+                        else:
+                            temp_value -= i_cost
+                            # 建玉更新
+                            sum_size -= i_size
+                        # 平均コスト更新
+                        avr_cost = abs(temp_value / sum_size)
+                        # 手数料計算
+                        pl = -i_fee
+
+                    # 決済
+                    else:
+                        cost = abs(i_cost / i_size)
+                        pl_cost = cost - avr_cost if np_side[i] == 'Buy' else avr_cost - cost
+                        pl_size = i_size if i_size <= abs(sum_size) else abs(sum_size)
+                        # PL
+                        pl = pl_cost * pl_size
+                        # 手数料計算
+                        pl -= i_fee
+
+                        # 建玉更新
+                        sum_size += i_size if np_side[i] == 'Buy' else -i_size
+                        # ドテンの場合、平均コスト更新
+                        if (sum_size > 0.0 and np_side[i] == 'Buy') or \
+                            (sum_size < 0.0 and np_side[i] == 'Sell'):
+                            # 平均コスト更新
+                            avr_cost = cost
+
+                lst_sum_size.append(sum_size)
+                lst_avr_cost.append(avr_cost)
+                lst_pl.append(pl)
+
+            df_execs['pos_size'] = lst_sum_size
+            df_execs['val_per_qty'] = lst_avr_cost
+            df_execs['pl'] = lst_pl
+            df_execs = df_execs[['exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee', 'pos_size', 'val_per_qty', 'pl']]
+            df_execs['datetime'] = pd.to_datetime(df_execs['exec_time'].astype(float), unit='s', utc=True)
+            df_execs = df_execs.set_index('datetime')
+            df_execs.index = df_execs.index.tz_convert('Asia/Tokyo')
+
+            return df_execs
+
+        except Exception as e:
+            print('get_status failed.' + str(e))
+
+        return None

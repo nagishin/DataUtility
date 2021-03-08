@@ -7,5 +7,5 @@ setup(
     version='1.0.0',
     author='Nagi',
     url='https://github.com/nagishin/DataUtility.git',
-    install_requires=['requests', 'datetime', 'pytz', 'numpy', 'pandas']
+    install_requires=['requests', 'datetime', 'pytz', 'numpy', 'pandas', 'git+https://github.com/MtkN1/pybybit.git']
 )
