@@ -76,7 +76,7 @@ st = du.Time(datetime.now(), tz='JST') \
 ```
 
 ## 2. Toolクラス
-BitMEX, bybitのOHLCVや約定履歴の取得・加工をサポートするクラス
+BitMEX, bybitのOHLCVや約定履歴の取得・加工をサポートするクラス<br>
 DataFrameでよく行う加工や変換を簡単に行う機能を関数化
 
 ```
