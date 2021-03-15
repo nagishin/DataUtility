@@ -6,15 +6,90 @@
 ## アンインストール
 `pip uninstall DataUtility`
 
-## 使い方
+## 1. Timeクラス
+日付変換・加工をサポートするクラス
+ * UnixTime, datetime, 日付文字列のいずれかを設定してTimeオブジェクトを作成します.
+ * Timeオブジェクトは必要に応じてタイムゾーン変換や時刻計算・丸めが可能です.
+ * TimeオブジェクトからUnixTime, datetime, 日付文字列の形式で時刻を取得できます.
+
+```
+import time
+from datetime import datetime
+import DataUtility as du
+
+#-------------------------------------------------------------------------------
+# Timeオブジェクト生成
+#-------------------------------------------------------------------------------
+# UnixTimeから
+t = du.Time(time.time(), tz='UTC')
+# datetimeから
+t = du.Time(datetime.now(), tz='JST')
+# 日付文字列から
+t = du.Time('2021/03/15 10:10:22', tz=+9)
+
+#-------------------------------------------------------------------------------
+# Timeオブジェクトから時刻取得
+#-------------------------------------------------------------------------------
+# UnixTime取得
+ut = t.unixtime()
+# datetime取得
+dt = t.datetime()
+# 日付文字列取得
+st = t.str('%Y/%m/%d %H:%M:%S')
+
+#-------------------------------------------------------------------------------
+# 日付文字列をUnixTimeに変換
+#-------------------------------------------------------------------------------
+t = du.Time('2021/03/15 10:10:22', tz='JST')
+ut = t.unixtime()
+
+# メソッドチェーンで記述 (上記と同処理)
+ut = du.Time('2021/03/15 10:10:22', tz='JST').unixtime()
+
+#-------------------------------------------------------------------------------
+# 現在時刻の4H足 開始時刻をdatetimeで取得
+#-------------------------------------------------------------------------------
+t = du.Time(datetime.now(), tz='UTC')
+t.round_hours(4)
+dt = t.datetime()
+
+# メソッドチェーンで記述 (上記と同処理)
+dt = du.Time(datetime.now(), tz='UTC).round_hours(4).datetime()
+
+#-------------------------------------------------------------------------------
+# 現在時刻(JST)の8時間30分後の15m足 開始時刻をUTC日付文字列('%Y/%m/%d %H:%M:%S')で取得
+#-------------------------------------------------------------------------------
+t = du.Time(datetime.now(), tz='JST')
+t.add_hours(8)
+t.add_minutes(30)
+t.round_minutes(15)
+t.convert_timezone('UTC')
+st = t.str('%Y/%m/%d %H:%M:%S')
+
+# メソッドチェーンで記述 (上記と同処理)
+st = du.Time(datetime.now(), tz='JST') \
+    .add_hours(8) \
+    .add_minutes(30) \
+    .round_minutes(15) \
+    .convert_timezone('UTC') \
+    .str('%Y/%m/%d %H:%M:%S')
+```
+
+## 2. Toolクラス
+BitMEX, bybitのOHLCVや約定履歴の取得・加工をサポートするクラス
+DataFrameでよく行う加工や変換を簡単に行う機能を関数化
+
 ```
 from datetime import datetime
 import DataUtility as du
 
-start_date = datetime.strptime('2020/09/01 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
-end_date   = datetime.strptime('2020/09/05 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
-start_ut   = int(start_date.timestamp())
-end_ut     = int(end_date.timestamp())
+#start_date = datetime.strptime('2020/09/01 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
+#end_date   = datetime.strptime('2020/09/05 09:00:00+0900', '%Y/%m/%d %H:%M:%S%z')
+#start_ut   = int(start_date.timestamp())
+#end_ut     = int(end_date.timestamp())
+
+start_ut = int(du.Time('2020/09/01 09:00:00', 'JST').unixtime())
+end_ut   = int(du.Time('2020/09/05 09:00:00', 'JST').unixtime())
 
 #-------------------------------------------------------------------------------
 # bybit約定履歴を取得
