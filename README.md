@@ -54,7 +54,7 @@ t.round_hours(4)
 dt = t.datetime()
 
 # メソッドチェーンで記述 (上記と同処理)
-dt = du.Time(datetime.now(), tz='UTC).round_hours(4).datetime()
+dt = du.Time(datetime.now(), tz='UTC').round_hours(4).datetime()
 
 #-------------------------------------------------------------------------------
 # 現在時刻(JST)の8時間30分後の15m足 開始時刻をUTC日付文字列('%Y/%m/%d %H:%M:%S')で取得
