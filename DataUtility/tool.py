@@ -1055,11 +1055,20 @@ class Tool(object):
             df_execs['sum_exec_pl'] = np.cumsum(df_execs['exec_pl'].values)
             df_execs['sum_exec_fee'] = np.cumsum(df_execs['exec_fee'].values)
             df_execs['sum_total_pl'] = np.cumsum(df_execs['total_pl'].values)
-            df_execs['sum_fiat_pl'] = df_execs['sum_total_pl'].values * df_execs['exec_price'].values
+
+            start_bal = cur_bal - df_execs['sum_total_pl'].values[-1]
+            df_execs['balance'] = df_execs['sum_total_pl'].values + start_bal
+            df_execs['fiat_balance'] = df_execs['balance'].values * df_execs['exec_price'].values
+            np_fiat = df_execs['fiat_balance'].values
+            np_temp = np.append(np_fiat, np_fiat[-1])
+            np_temp = np.diff(np_temp)
+            df_execs['fiat_pl'] = np.roll(np_temp, shift=1)
+            df_execs['sum_fiat_pl'] = np.cumsum(df_execs['fiat_pl'].values)
 
             df_execs = df_execs[
                 ['exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee',
                  'pos_size', 'val_per_qty', 'exec_pl', 'exec_fee', 'total_pl',
+                 'balance', 'fiat_balance', 'fiat_pl',
                  'sum_exec_pl', 'sum_exec_fee', 'sum_total_pl', 'sum_fiat_pl']]
             df_execs = df_execs[(df_execs['exec_time'] >= from_ut)]
             df_execs.reset_index(drop=True, inplace=True)
@@ -1070,11 +1079,9 @@ class Tool(object):
             # 統計情報算出
             start_dt = datetime.fromtimestamp(from_ut, tz=timezone('Asia/Tokyo'))
             end_dt = datetime.fromtimestamp(time.time(), tz=timezone('Asia/Tokyo'))
-            print(f'[Execs period] {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}')
-
-            start_bal = cur_bal - df_execs['sum_total_pl'].values[-1]
-            cls.__print_execution_info(df_execs, start_bal, fiat_basis=False)
-            cls.__print_execution_info(df_execs, start_bal, fiat_basis=True)
+            print(f'\n[Execs period   ]  {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}')
+            cls.__print_execution_info(df_execs, fiat_basis=False)
+            cls.__print_execution_info(df_execs, fiat_basis=True)
 
             return df_execs
 
@@ -1087,7 +1094,7 @@ class Tool(object):
     # 統計情報算出
     #---------------------------------------------------------------------------
     @classmethod
-    def __print_execution_info(cls, df_execs: pd.DataFrame, start_balance: float = 0, fiat_basis=False) -> None:
+    def __print_execution_info(cls, df_execs: pd.DataFrame, fiat_basis=False) -> None:
         try:
             trades_info = {
                 'trades' : {
@@ -1134,10 +1141,7 @@ class Tool(object):
             if fiat_basis == True:
                 # 約定履歴のみに絞り込み、フィアット残高の差分からPnLを算出
                 df_trade = df_execs[df_execs['exec_type'] == 'Trade'].copy()
-                np_fiat_trade = df_trade['sum_fiat_pl'].values
-                np_temp = np.append(np_fiat_trade, np_fiat_trade[-1])
-                np_temp = np.diff(np_temp)
-                np_pnl = np.roll(np_temp, shift=1)
+                np_pnl = df_trade['fiat_pl'].values
                 np_profit = np_pnl[np_pnl > 0]
                 np_loss = np_pnl[np_pnl < 0]
                 np_ut = df_trade['exec_time'].values
@@ -1164,11 +1168,11 @@ class Tool(object):
             f['funding']  = np_fr.sum()
 
             if fiat_basis == True:
-                start_bal = int(round(start_balance * df_execs['exec_price'].values[0], 0))
-                end_bal = int(round((start_balance + df_execs['sum_total_pl'].values[-1]) * df_execs['exec_price'].values[0], 0))
+                start_bal = int(round(df_execs['fiat_balance'].values[0], 0))
+                end_bal = int(round((df_execs['fiat_balance'].values[-1]), 0))
             else:
-                start_bal = start_balance
-                end_bal = start_balance + df_execs['sum_total_pl'].values[-1]
+                start_bal = df_execs['balance'].values[0]
+                end_bal = df_execs['fiat_balance'].values[-1]
 
             # 最大DD計算
             np_cumsum = np_pnl.cumsum()
