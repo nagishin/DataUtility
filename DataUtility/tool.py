@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from inspect import currentframe
 import pybybit
+from itertools import groupby
 
 class Tool(object):
 
@@ -969,10 +970,13 @@ class Tool(object):
             df_execs.reset_index(drop=True, inplace=True)
 
             # 約定履歴より損益推移計算
+            lst_exec_pl  = []
+            lst_exec_fee = []
             lst_pl       = []
             lst_sum_size = []
             lst_avr_cost = []
-            lst_pl   = []
+            exec_pl  = 0
+            exec_fee = 0
             pl       = 0
             sum_size = base_pos
             avr_cost = base_avr
@@ -990,6 +994,7 @@ class Tool(object):
                 # Fundingの場合
                 if np_type[i] == 'Funding':
                     # 手数料計算
+                    exec_fee = -i_fee
                     pl = -i_fee
 
                 # Tradeの場合
@@ -1010,6 +1015,7 @@ class Tool(object):
                         # 平均コスト更新
                         avr_cost = abs(temp_value / sum_size)
                         # 手数料計算
+                        exec_fee = -i_fee
                         pl = -i_fee
 
                     # 決済
@@ -1018,8 +1024,10 @@ class Tool(object):
                         pl_cost = cost - avr_cost if np_side[i] == 'Buy' else avr_cost - cost
                         pl_size = i_size if i_size <= abs(sum_size) else abs(sum_size)
                         # PL
+                        exec_pl = pl_cost * pl_size
                         pl = pl_cost * pl_size
                         # 手数料計算
+                        exec_fee = -i_fee
                         pl -= i_fee
 
                         # 建玉更新
@@ -1032,17 +1040,37 @@ class Tool(object):
 
                 lst_sum_size.append(sum_size)
                 lst_avr_cost.append(avr_cost)
+                lst_exec_pl.append(exec_pl)
+                lst_exec_fee.append(exec_fee)
                 lst_pl.append(pl)
 
             df_execs['pos_size'] = lst_sum_size
             df_execs['val_per_qty'] = lst_avr_cost
-            df_execs['pl'] = lst_pl
-            df_execs = df_execs[['exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee', 'pos_size', 'val_per_qty', 'pl']]
+            df_execs['exec_pl'] = lst_exec_pl
+            df_execs['exec_fee'] = lst_exec_fee
+            df_execs['total_pl'] = lst_pl
+
+            df_execs['sum_exec_pl'] = np.cumsum(df_execs['exec_pl'].values)
+            df_execs['sum_exec_fee'] = np.cumsum(df_execs['sum_exec_fee'].values)
+            df_execs['sum_total_pl'] = np.cumsum(df_execs['sum_total_pl'].values)
+            df_execs['sum_fiat_pl'] = df_execs['sum_total_pl'].values * df_execs['exec_price'].values
+
+            df_execs = df_execs[
+                ['exec_time', 'exec_type', 'order_type', 'side', 'exec_price', 'exec_qty', 'exec_value', 'fee_rate', 'exec_fee',
+                 'pos_size', 'val_per_qty', 'exec_pl', 'exec_fee', 'total_pl',
+                 'sum_exec_pl', 'sum_exec_fee', 'sum_total_pl', 'sum_fiat_pl']]
             df_execs = df_execs[(df_execs['exec_time'] >= from_ut)]
             df_execs.reset_index(drop=True, inplace=True)
             df_execs['datetime'] = pd.to_datetime(df_execs['exec_time'].astype(float), unit='s', utc=True)
             df_execs = df_execs.set_index('datetime')
             df_execs.index = df_execs.index.tz_convert('Asia/Tokyo')
+
+            # 統計情報算出
+            start_dt = datetime.fromtimestamp(from_ut, tz=timezone('Asia/Tokyo'))
+            end_dt = datetime.fromtimestamp(time.time(), tz=timezone('Asia/Tokyo'))
+            print(f'[Execs period] {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}\n')
+            cls.__print_execution_info(df_execs, fiat_basis=False)
+            cls.__print_execution_info(df_execs, fiat_basis=True)
 
             return df_execs
 
@@ -1050,3 +1078,167 @@ class Tool(object):
             print('get_status failed.' + str(e))
 
         return None
+
+    #---------------------------------------------------------------------------
+    # 統計情報算出
+    #---------------------------------------------------------------------------
+    @classmethod
+    def __print_execution_info(cls, df_execs, fiat_basis=False) -> None:
+        try:
+            trades_info = {
+                'trades' : {
+                    'count'        : 0, # 総取引回数
+                    'pf'           : 0, # PF
+                    'sum'          : 0, # 総損益
+                    'mean'         : 0, # 平均損益
+                    'maxdd'        : 0, # 最大DD
+                    'maxdd_ratio'  : 0, # 最大DD率
+                    'maxdd_ut'     : 0, # 最大DD UnixTime
+                    'sum_size'     : 0, # 総取引高
+                },
+                'profit' : {
+                    'count'        : 0, # 勝取引数
+                    'sum'          : 0, # 総利益
+                    'max'          : 0, # 最大利益(1取引あたり)
+                    'mean'         : 0, # 平均利益
+                    'maxlen_count' : 0, # 最大連勝数
+                    'maxlen_sum'   : 0, # 最大連勝利益
+                },
+                'loss' : {
+                    'count'        : 0, # 負取引数
+                    'sum'          : 0, # 総損失
+                    'max'          : 0, # 最大損失(1取引あたり)
+                    'mean'         : 0, # 平均損失
+                    'maxlen_count' : 0, # 最大連敗数
+                    'maxlen_sum'   : 0, # 最大連敗損失
+                },
+                'fee' : {
+                    'trade'        : 0, # 総取引手数料
+                    'funding'      : 0, # 総ファンディング手数料
+                },
+            }
+
+            if df_execs is None or len(df_execs) < 1:
+                print('execution is not exists.')
+                return
+
+            t = trades_info['trades']
+            p = trades_info['profit']
+            l = trades_info['loss']
+            f = trades_info['fee']
+
+            if fiat_basis == True:
+                # 約定履歴のみに絞り込み、フィアット残高の差分からPnLを算出
+                df_trade = df_execs[df_execs['exec_type'] == 'Trade'].copy()
+                np_fiat_trade = df_trade['sum_fiat_pl'].values
+                np_temp = np.append(np_fiat_trade, np_fiat_trade[-1])
+                np_temp = np.diff(np_temp)
+                np_pnl = np.roll(np_temp, shift=1)
+                np_profit = np_pnl[np_pnl > 0]
+                np_loss = np_pnl[np_pnl < 0]
+                np_ut = df_trade['exec_time'].values
+                np_fr = np.zeros(1, dtype=int)
+                np_fee = np.zeros(1, dtype=int)
+                np_size = np.zeros(1, dtype=int)
+            else:
+                df_ex = df_execs[df_execs['exec_type'] != 'Funding']
+                df_fr = df_execs[df_execs['exec_type'] == 'Funding']
+                np_pnl = df_ex['total_pl'].values
+                np_profit = np_pnl[np_pnl > 0]
+                np_loss = np_pnl[np_pnl < 0]
+                np_ut = df_ex['exec_time'].values
+                np_fee = df_ex['exec_fee'].values
+                np_fr = df_fr['exec_fee'].values
+                np_size = df_ex['exec_qty'].values
+                np_size = np.where(np_size < 0, -np_size, np_size)
+
+            t['count']    = len(np_pnl)
+            t['sum']      = np_pnl.sum()
+            t['mean']     = np_pnl.mean()
+            t['sum_size'] = np_size.sum()
+            f['trade']    = np_fee.sum()
+            f['funding']  = np_fr.sum()
+
+            # 最大DD計算
+            np_cumsum = np_pnl.cumsum()
+            np_maxacc = np.maximum.accumulate(np_cumsum)
+            np_dd = np_cumsum - np_maxacc
+            np_dd_ratio = np_dd / (np_cumsum - np_dd)
+            i = np.argmin(np_dd_ratio)
+            t['maxdd_ratio'] = np_dd_ratio[i]
+            t['maxdd'] = np_dd[i]
+            t['maxdd_ut'] = np_ut[i]
+
+            if len(np_profit) > 0:
+                p['count'] = len(np_profit)
+                p['sum']   = np_profit.sum()
+                p['max']   = np_profit.max()
+                p['mean']  = np_profit.mean()
+
+            if len(np_loss) > 0:
+                l['count'] = len(np_loss)
+                l['sum']   = np_loss.sum()
+                l['max']   = np_loss.min()
+                l['mean']  = np_loss.mean()
+
+            if l['sum'] != 0:
+                t['pf'] = abs(p['sum'] / l['sum'])
+
+            # 最大連勝/連敗計算
+            np_nonzero = np_pnl[np_pnl != 0]
+            if len(np_nonzero) > 0:
+                group_sum = [[key, list(group)] for key, group in groupby(np_nonzero, key=lambda x: x > 0)]
+                # 連勝
+                df_group_sum = pd.DataFrame([[len(i[1]), sum(i[1])] for i in group_sum if i[0]==True], columns=['count', 'sum'])
+                if len(df_group_sum.index > 0):
+                    idxmax = df_group_sum['count'].idxmax()
+                    p['maxlen_count'] = df_group_sum['count'].iloc[idxmax]
+                    p['maxlen_sum']   = df_group_sum['sum'].iloc[idxmax]
+                # 連敗
+                df_group_sum = pd.DataFrame([[len(i[1]), sum(i[1])] for i in group_sum if i[0]==False], columns=['count', 'sum'])
+                if len(df_group_sum.index > 0):
+                    idxmax = df_group_sum['count'].idxmax()
+                    l['maxlen_count'] = df_group_sum['count'].iloc[idxmax]
+                    l['maxlen_sum']   = df_group_sum['sum'].iloc[idxmax]
+
+            # 統計情報出力
+            ratio_p = 0
+            ratio_l = 0
+            if (p['count'] + l['count']) > 0:
+                ratio_p = p['count'] / (p['count'] + l['count'])
+                ratio_l = l['count'] / (p['count'] + l['count'])
+            t_size = round(t['sum_size'], 4)
+            t_sum = round(t['sum'], 4)
+            t_avr = round(t['mean'], 4)
+            t_dd = round(t['maxdd'], 4)
+            t_dd_dt = datetime.fromtimestamp(t['maxdd_ut'], tz=timezone('Asia/Tokyo'))
+            p_sum = round(p['sum'], 4)
+            p_avr = round(p['mean'], 4)
+            p_max = round(p['max'], 4)
+            p_lensum = round(p['maxlen_sum'], 4)
+            l_sum = round(l['sum'], 4)
+            l_avr = round(l['mean'], 4)
+            l_max = round(l['max'], 4)
+            l_lensum = round(l['maxlen_sum'], 4)
+            f_trade = round(f['trade'], 4)
+            f_funding = round(f['funding'], 4)
+
+            if fiat_basis == True:
+                message = f'[Fiat statistics]  PF:{t["pf"]:.2f}\n'
+            else:
+                message = f'[BTC  statistics]  PF:{t["pf"]:.2f}\n'
+            message += f'  [Total   ] '
+            message += f'Count:{t["count"]}(Size:{t_size:,})  PnL:{t_sum:+,}  Avr:{t_avr:+,}\n'
+            message += f'  [Profit  ] '
+            message += f'Count:{p["count"]}({ratio_p:.2%})  Sum:{p_sum:+,}  Avr:{p_avr:+,}  Max:{p_max:+,}  MaxLen:{p["maxlen_count"]}({p_lensum:+,})\n'
+            message += f'  [Loss    ] '
+            message += f'Count:{l["count"]}({ratio_l:.2%})  Sum:{l_sum:+,}  Avr:{l_avr:+,}  Max:{l_max:+,}  MaxLen:{l["maxlen_count"]}({l_lensum:+,})\n'
+            message += f'  [Fee     ] '
+            message += f'Trade:{f_trade:,}  Funding:{f_funding:,}\n'
+            message += f'  [Max risk] '
+            message += f'Drawdown:{t["maxdd_ratio"]:.2%}({t_dd:+,}) {t_dd_dt:%Y/%m/%d %H:%M:%S}\n'
+            print(message)
+
+        except Exception as e:
+            print(f'__get_execution_info failed.\n{traceback.format_exc()}')
+            raise e
