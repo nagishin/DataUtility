@@ -1081,7 +1081,7 @@ class Tool(object):
             # 統計情報算出
             start_dt = datetime.fromtimestamp(from_ut, tz=timezone('Asia/Tokyo'))
             end_dt = datetime.fromtimestamp(time.time(), tz=timezone('Asia/Tokyo'))
-            print(f'\n[Execs period   ]  {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}')
+            print(f'[Execs period   ]  {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}\n')
             cls.__print_execution_info(df_execs, fiat_basis=False)
             cls.__print_execution_info(df_execs, fiat_basis=True)
 
@@ -1177,8 +1177,6 @@ class Tool(object):
                 end_bal = df_execs['balance'].values[-1]
 
             # 最大DD計算
-            #np_cumsum = np_pnl.cumsum()
-            #np_cumsum = np_cumsum + start_bal
             if fiat_basis == True:
                 np_cumsum = df_ex['fiat_balance'].values
             else:
@@ -1224,26 +1222,27 @@ class Tool(object):
                     l['maxlen_sum']   = df_group_sum['sum'].iloc[idxmax]
 
             # 統計情報出力
+            digit = 1 if fiat_basis == True else 4
             ratio_p = 0
             ratio_l = 0
             if (p['count'] + l['count']) > 0:
                 ratio_p = p['count'] / (p['count'] + l['count'])
                 ratio_l = l['count'] / (p['count'] + l['count'])
-            t_size = round(t['sum_size'], 4)
-            t_sum = round(t['sum'], 4)
-            t_avr = round(t['mean'], 4)
-            t_dd = round(t['maxdd'], 4)
+            t_size = round(t['sum_size'], 0)
+            t_sum = round(t['sum'], digit)
+            t_avr = round(t['mean'], digit)
+            t_dd = round(t['maxdd'], digit)
             t_dd_dt = datetime.fromtimestamp(t['maxdd_ut'], tz=timezone('Asia/Tokyo'))
-            p_sum = round(p['sum'], 4)
-            p_avr = round(p['mean'], 4)
-            p_max = round(p['max'], 4)
-            p_lensum = round(p['maxlen_sum'], 4)
-            l_sum = round(l['sum'], 4)
-            l_avr = round(l['mean'], 4)
-            l_max = round(l['max'], 4)
-            l_lensum = round(l['maxlen_sum'], 4)
-            f_trade = round(f['trade'], 4)
-            f_funding = round(f['funding'], 4)
+            p_sum = round(p['sum'], digit)
+            p_avr = round(p['mean'], digit)
+            p_max = round(p['max'], digit)
+            p_lensum = round(p['maxlen_sum'], digit)
+            l_sum = round(l['sum'], digit)
+            l_avr = round(l['mean'], digit)
+            l_max = round(l['max'], digit)
+            l_lensum = round(l['maxlen_sum'], digit)
+            f_trade = round(f['trade'], digit)
+            f_funding = round(f['funding'], digit)
 
             if fiat_basis == True:
                 message = f'[Fiat statistics]  PF:{t["pf"]:.2f}  Balance:{start_bal:,} -> {end_bal:,}\n'
