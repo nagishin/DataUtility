@@ -929,7 +929,9 @@ class Tool(object):
             pos = pos.json()['result']
             side = pos['side']
             size = int(pos['size'])
-            cur_size = size if side == 'Buy' else -size
+            cur_size = size if side == 'Buy' else - size
+            # 残高取得
+            cur_bal = float(pos['wallet_balance'])
 
             # 現在のポジションと約定履歴よりポジション推移計算
             calc_pos = np.where(df_execs['exec_type'] == 'Trade', df_execs['exec_qty'], 0)
@@ -1068,9 +1070,11 @@ class Tool(object):
             # 統計情報算出
             start_dt = datetime.fromtimestamp(from_ut, tz=timezone('Asia/Tokyo'))
             end_dt = datetime.fromtimestamp(time.time(), tz=timezone('Asia/Tokyo'))
-            print(f'[Execs period] {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}\n')
-            cls.__print_execution_info(df_execs, fiat_basis=False)
-            cls.__print_execution_info(df_execs, fiat_basis=True)
+            print(f'[Execs period] {start_dt:%Y/%m/%d %H:%M:%S} - {end_dt:%Y/%m/%d %H:%M:%S}')
+
+            start_bal = cur_bal - df_execs['sum_total_pl'].values[-1]
+            cls.__print_execution_info(df_execs, start_bal, fiat_basis=False)
+            cls.__print_execution_info(df_execs, start_bal, fiat_basis=True)
 
             return df_execs
 
@@ -1083,7 +1087,7 @@ class Tool(object):
     # 統計情報算出
     #---------------------------------------------------------------------------
     @classmethod
-    def __print_execution_info(cls, df_execs, fiat_basis=False) -> None:
+    def __print_execution_info(cls, df_execs: pd.DataFrame, start_balance: float = 0, fiat_basis=False) -> None:
         try:
             trades_info = {
                 'trades' : {
@@ -1159,8 +1163,16 @@ class Tool(object):
             f['trade']    = np_fee.sum()
             f['funding']  = np_fr.sum()
 
+            if fiat_basis == True:
+                start_bal = int(round(start_balance * df_execs['exec_price'].values[0], 0))
+                end_bal = int(round((start_balance + df_execs['sum_total_pl'].values[-1]) * df_execs['exec_price'].values[0], 0))
+            else:
+                start_bal = start_balance
+                end_bal = start_balance + df_execs['sum_total_pl'].values[-1]
+
             # 最大DD計算
             np_cumsum = np_pnl.cumsum()
+            np_cumsum = np_cumsum + start_bal
             np_maxacc = np.maximum.accumulate(np_cumsum)
             np_dd = np_cumsum - np_maxacc
             np_dd_ratio = np_dd / (np_cumsum - np_dd)
@@ -1224,9 +1236,9 @@ class Tool(object):
             f_funding = round(f['funding'], 4)
 
             if fiat_basis == True:
-                message = f'[Fiat statistics]  PF:{t["pf"]:.2f}\n'
+                message = f'[Fiat statistics]  PF:{t["pf"]:.2f} ({start_bal:,} -> {end_bal:,})\n'
             else:
-                message = f'[BTC  statistics]  PF:{t["pf"]:.2f}\n'
+                message = f'[BTC  statistics]  PF:{t["pf"]:.2f} ({start_bal:.4f} -> {end_bal:.4f})\n'
             message += f'  [Total   ] '
             message += f'Count:{t["count"]}(Size:{t_size:,})  PnL:{t_sum:+,}  Avr:{t_avr:+,}\n'
             message += f'  [Profit  ] '
