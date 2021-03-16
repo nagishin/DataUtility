@@ -1051,8 +1051,8 @@ class Tool(object):
             df_execs['total_pl'] = lst_pl
 
             df_execs['sum_exec_pl'] = np.cumsum(df_execs['exec_pl'].values)
-            df_execs['sum_exec_fee'] = np.cumsum(df_execs['sum_exec_fee'].values)
-            df_execs['sum_total_pl'] = np.cumsum(df_execs['sum_total_pl'].values)
+            df_execs['sum_exec_fee'] = np.cumsum(df_execs['exec_fee'].values)
+            df_execs['sum_total_pl'] = np.cumsum(df_execs['total_pl'].values)
             df_execs['sum_fiat_pl'] = df_execs['sum_total_pl'].values * df_execs['exec_price'].values
 
             df_execs = df_execs[
