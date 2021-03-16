@@ -1172,11 +1172,15 @@ class Tool(object):
                 end_bal = int(round((df_execs['fiat_balance'].values[-1]), 0))
             else:
                 start_bal = df_execs['balance'].values[0]
-                end_bal = df_execs['fiat_balance'].values[-1]
+                end_bal = df_execs['balance'].values[-1]
 
             # 最大DD計算
-            np_cumsum = np_pnl.cumsum()
-            np_cumsum = np_cumsum + start_bal
+            #np_cumsum = np_pnl.cumsum()
+            #np_cumsum = np_cumsum + start_bal
+            if fiat_basis == True:
+                np_cumsum = df_execs['fiat_balance'].values
+            else:
+                np_cumsum = df_execs['balance'].values
             np_maxacc = np.maximum.accumulate(np_cumsum)
             np_dd = np_cumsum - np_maxacc
             np_dd_ratio = np_dd / (np_cumsum - np_dd)
