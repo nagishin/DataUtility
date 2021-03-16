@@ -1244,9 +1244,9 @@ class Tool(object):
             f_funding = round(f['funding'], 4)
 
             if fiat_basis == True:
-                message = f'[Fiat statistics]  PF:{t["pf"]:.2f} ({start_bal:,} -> {end_bal:,})\n'
+                message = f'[Fiat statistics]  PF:{t["pf"]:.2f}  Balance:{start_bal:,} -> {end_bal:,}\n'
             else:
-                message = f'[BTC  statistics]  PF:{t["pf"]:.2f} ({start_bal:.4f} -> {end_bal:.4f})\n'
+                message = f'[BTC  statistics]  PF:{t["pf"]:.2f}  Balance:{start_bal:.4f} -> {end_bal:.4f}\n'
             message += f'  [Total   ] '
             message += f'Count:{t["count"]}(Size:{t_size:,})  PnL:{t_sum:+,}  Avr:{t_avr:+,}\n'
             message += f'  [Profit  ] '
