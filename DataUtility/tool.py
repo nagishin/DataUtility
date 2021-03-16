@@ -1138,19 +1138,19 @@ class Tool(object):
             l = trades_info['loss']
             f = trades_info['fee']
 
+            # 約定履歴を分類
+            df_ex = df_execs[df_execs['exec_type'] != 'Funding'].copy()
+            df_fr = df_execs[df_execs['exec_type'] == 'Funding'].copy()
+
             if fiat_basis == True:
-                # 約定履歴のみに絞り込み、フィアット残高の差分からPnLを算出
-                df_trade = df_execs[df_execs['exec_type'] == 'Trade'].copy()
-                np_pnl = df_trade['fiat_pl'].values
+                np_pnl = df_ex['fiat_pl'].values
                 np_profit = np_pnl[np_pnl > 0]
                 np_loss = np_pnl[np_pnl < 0]
-                np_ut = df_trade['exec_time'].values
+                np_ut = df_ex['exec_time'].values
                 np_fr = np.zeros(1, dtype=int)
                 np_fee = np.zeros(1, dtype=int)
                 np_size = np.zeros(1, dtype=int)
             else:
-                df_ex = df_execs[df_execs['exec_type'] != 'Funding']
-                df_fr = df_execs[df_execs['exec_type'] == 'Funding']
                 np_pnl = df_ex['total_pl'].values
                 np_profit = np_pnl[np_pnl > 0]
                 np_loss = np_pnl[np_pnl < 0]
@@ -1178,9 +1178,9 @@ class Tool(object):
             #np_cumsum = np_pnl.cumsum()
             #np_cumsum = np_cumsum + start_bal
             if fiat_basis == True:
-                np_cumsum = df_execs['fiat_balance'].values
+                np_cumsum = df_ex['fiat_balance'].values
             else:
-                np_cumsum = df_execs['balance'].values
+                np_cumsum = df_ex['balance'].values
             np_maxacc = np.maximum.accumulate(np_cumsum)
             np_dd = np_cumsum - np_maxacc
             np_dd_ratio = np_dd / (np_cumsum - np_dd)
