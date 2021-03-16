@@ -863,11 +863,13 @@ class Tool(object):
     #  testnet              : 接続先(True:testnet, False:realnet)
     #  symbol               : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
     #  from_ut              : 取得開始UnixTime
+    #  buffer_days          : from_utより遡る日数 (デフォルトは 7 days)
+    #                       ※ 損益計算の起点(ポジション=0 or ドテン)を求めるため
     # [return]
     #  指定期間内の自約定履歴DataFrame (エラーの場合はNoneを返す)
     #---------------------------------------------------------------------------
     @classmethod
-    def get_executions_from_bybit(cls, api_key: str, api_secret: str, testnet: bool = False, symbol: str = 'BTCUSD', from_ut: int = 0) -> pd.DataFrame:
+    def get_executions_from_bybit(cls, api_key: str, api_secret: str, testnet: bool = False, symbol: str = 'BTCUSD', from_ut: int = 0, buffer_days: int = 7) -> pd.DataFrame:
         try:
             # pybybit APIインスタンス生成
             api = [api_key, api_secret]
@@ -877,7 +879,7 @@ class Tool(object):
             lst_execs = [] # 取得した約定履歴リスト
             while True:
                 try:
-                    ret = bybit_api.rest.inverse.private_execution_list(symbol=symbol, start_time=int(from_ut) - 86400 * 7, page=get_start, limit=200)
+                    ret = bybit_api.rest.inverse.private_execution_list(symbol=symbol, start_time=int(from_ut) - 86400 * buffer_days, page=get_start, limit=200)
                     ret = ret.json()
                     rl_status = int(ret['rate_limit_status'])
                     rl_reset = float(ret['rate_limit_reset_ms']) / 1000
@@ -965,7 +967,7 @@ class Tool(object):
                     break
 
             if base_idx < 0:
-                print('Base position not found 7 days before the from_ut.')
+                print(f'Base position not found {buffer_days} days before the from_ut.')
 
             # 集計基準から約定履歴を判定し、ポジション推移を求める
             df_execs = df_execs.iloc[base_idx:, :]
