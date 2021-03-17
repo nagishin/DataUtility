@@ -105,21 +105,64 @@ class Tool(object):
     #---------------------------------------------------------------------------
     @classmethod
     def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path='./bitmex_ohlcv.csv', request_interval=0.5):
+        df = None
+        len_csv = 0
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
+                    # csv読み込み
                     df = pd.read_csv(csv_path)
-                    if len(df.index) > 0:
+                    len_csv = len(df.index)
+                    if len_csv > 1:
                         ut = df['unixtime'].values
                         p = ut[1] - ut[0]
-                        if ((start_ut >= ut[0]) & (end_ut <= ut[-1]) & (p == period * 60)):
+                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        # period判定
+                        if p == period * 60:
+                            lst_df = []
+                            # csv先頭よりも開始日が過去の場合は不足分を取得
+                            if start_ut < ut[0]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_bitmex(start_ut, ut[0], period, symbol, request_interval)
+                                )
+                            lst_df.append(df)
+                            # csv末尾よりも終了日が未来の場合は不足分を取得
+                            if end_ut > ut[-1]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_bitmex(ut[-1], end_ut, period, symbol, request_interval)
+                                )
+                            # DataFrame結合＆unixtimeソート
+                            df = cls.concat_df(lst_df, sort_column='unixtime')
+                            # 重複行削除
+                            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+                            # 指定範囲フィルタリング
                             df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+                            # indexリセット
                             df.reset_index(drop=True, inplace=True)
-                            print('ohlcv from csv.')
-                            return df
                 except Exception:
                     pass
 
+        if df is None or len(df.index) < 1:
+            try:
+                df = cls.__request_ohlcv_from_bitmex(start_ut, end_ut, period, symbol, request_interval)
+            except Exception:
+                pass
+
+        # 読み込んだcsvよりデータが増えている場合はcsv保存
+        ut = df['unixtime'].values
+        if len(df.index) > len_csv:
+            if ((csv_path is not None) and (len(csv_path) > 0)):
+                csv_dir = os.path.dirname(csv_path)
+                if not os.path.exists(csv_dir):
+                    os.makedirs(csv_dir)
+                df.to_csv(csv_path, header=True, index=False)
+                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+
+        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        return df
+
+    @classmethod
+    def __request_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', request_interval=0.5):
         url = 'https://www.bitmex.com/api/udf/history'
         params = {
             'symbol': symbol,
@@ -153,17 +196,8 @@ class Tool(object):
             OrderedDict(unixtime=t, open=o, high=h, low=l, close=c, volume=v)
         )
         df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
-        if len(df.index) == 0:
-            return df
-        df.reset_index(drop=True, inplace=True)
-
-        if ((csv_path is not None) and (len(csv_path) > 0)):
-            csv_dir = os.path.dirname(csv_path)
-            if not os.path.exists(csv_dir):
-                os.makedirs(csv_dir)
-            df.to_csv(csv_path, header=True, index=False)
-
-        print('ohlcv from request.')
+        if len(df.index) > 0:
+            df.reset_index(drop=True, inplace=True)
         return df
 
     #---------------------------------------------------------------------------
