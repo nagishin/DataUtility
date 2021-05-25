@@ -263,6 +263,28 @@ api_key = 'your api key',
 api_secret = 'your api secret'
 from_ut = du.Tool.to_unixtime('2021/01/01 00:00:00')
 df_execs = du.Tool.get_executions_from_bybit(api_key, api_secret, testnet=False, symbol='BTCUSD', from_ut=from_ut)
+
+
+#---------------------------------------------------------------------------
+# 複数DataFrameを外部結合
+#---------------------------------------------------------------------------
+# [params]
+#  dfs         : 結合するDataFrameリスト
+#  on_column   : key列名
+#  join_column : 結合する列名
+#  fillna      : 欠損値補間
+#                 * None:しない
+#                 * 数値     : 指定値で補間
+#                 * 'ffill'  : 前の値で補間
+#                 * 'bfill'  : 後の値で補間
+#                 * 'linear' : 前後の値で線形補間
+#  sort_index  : 結合したDataFrameをindexでソート(None:しない, True:昇順, False:降順)
+#  is_summary  : 結合した列を合計(True:合計列のみ, False:各結合列)
+# [return]
+#  DataFrame
+#---------------------------------------------------------------------------
+dfs = [df1, df2, df3, df4, df5]
+df_joined = du.Tool.outer_join_dfs(dfs, on_column='key_col', join_column='val_col', fillna=0, sort_index=True, is_summary=False)
 ```
 
 ## GitHub Gist

@@ -1297,3 +1297,63 @@ class Tool(object):
         except Exception as e:
             print(f'__get_execution_info failed.\n{traceback.format_exc()}')
             raise e
+
+    #---------------------------------------------------------------------------
+    # 複数DataFrameを外部結合
+    #---------------------------------------------------------------------------
+    # [params]
+    #  dfs         : 結合するDataFrameリスト
+    #  on_column   : key列名
+    #  join_column : 結合する列名
+    #  fillna      : 欠損値補間
+    #                 * None:しない
+    #                 * 数値     : 指定値で補間
+    #                 * 'ffill'  : 前の値で補間
+    #                 * 'bfill'  : 後の値で補間
+    #                 * 'linear' : 前後の値で線形補間
+    #  sort_index  : 結合したDataFrameをindexでソート(None:しない, True:昇順, False:降順)
+    #  is_summary  : 結合した列を合計(True:合計列のみ, False:各結合列)
+    # [return]
+    #  DataFrame
+    #---------------------------------------------------------------------------
+    @classmethod
+    def outer_join_dfs(cls, dfs: list, on_column: str, join_column: str, fillna=None, sort_index=None, is_summary=False) -> pd.DataFrame:
+        try:
+            if isinstance(dfs, list) == False:
+                return None
+            if len(dfs) < 2:
+                return None
+            if on_column == None or join_column == None:
+                return None
+            if len(on_column) < 1 or len(join_column) < 1:
+                return None
+            for df in dfs:
+                if isinstance(df, pd.DataFrame) == False:
+                    return None
+                if on_column not in df.columns:
+                    return None
+                if join_column not in df.columns:
+                    return None
+
+            dfs = [df[[on_column, join_column]].set_index(on_column).rename(
+                columns={join_column: join_column+'_'+str(i)}) for i, df in enumerate(dfs)]
+            df_ret = pd.DataFrame().join(dfs, how='outer')
+
+            if isinstance(fillna, float) or isinstance(fillna, int):
+                df_ret.fillna(fillna, inplace=True)
+            elif fillna == 'ffill' or fillna == 'bfill':
+                df_ret.fillna(method=fillna, inplace=True)
+            elif fillna == 'linear':
+                df_ret.interpolate(method=fillna, inplace=True)
+
+            if isinstance(sort_index, bool):
+                df_ret.sort_index(ascending=sort_index, inplace=True)
+
+            if is_summary:
+                sr_sum = df_ret.sum(axis=1, numeric_only=True)
+                df_ret = pd.DataFrame(sr_sum, columns=[join_column])
+
+            return df_ret
+
+        except Exception as e:
+            print('outer_join_dfs failed.' + str(e))
