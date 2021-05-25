@@ -201,6 +201,256 @@ class Tool(object):
         return df
 
     #---------------------------------------------------------------------------
+    # bybit OHLCVを取得
+    # (取得件数:200/requestとなるため, 大量取得時はRateLimit注意)
+    #---------------------------------------------------------------------------
+    # [params]
+    #  start_ut / end_ut : UnixTimeで指定
+    #  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D' 'M' 'W')
+    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTCUSD)
+    #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+    #                      ファイルがない or 期間を満たしていない場合はrequestで取得
+    #                      csvファイル保存 (None or 空文字は保存しない)
+    #  request_interval  : 複数request時のsleep時間(sec)
+    #  ohlcv_kind        : end point指定
+    #                      'default':kline, 'mark':mark-price, 'index':index-price, 'premium':premium-index
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', ('volume')]
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_ohlcv.csv', request_interval=1.0, ohlcv_kind='default'):
+        df = None
+        len_csv = 0
+        if ((csv_path is not None) and (len(csv_path) > 0)):
+            if os.path.isfile(csv_path):
+                try:
+                    # csv読み込み
+                    df = pd.read_csv(csv_path)
+                    len_csv = len(df.index)
+                    if len_csv > 1:
+                        ut = df['unixtime'].values
+                        p = ut[1] - ut[0]
+                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        # period判定
+                        if p == period * 60:
+                            lst_df = []
+                            # csv先頭よりも開始日が過去の場合は不足分を取得
+                            if start_ut < ut[0]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_bybit(start_ut, ut[0], period, symbol, request_interval, ohlcv_kind)
+                                )
+                            lst_df.append(df)
+                            # csv末尾よりも終了日が未来の場合は不足分を取得
+                            if end_ut > ut[-1]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_bybit(ut[-1], end_ut, period, symbol, request_interval, ohlcv_kind)
+                                )
+                            # DataFrame結合＆unixtimeソート
+                            df = cls.concat_df(lst_df, sort_column='unixtime')
+                            # 重複行削除
+                            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+                            # 指定範囲フィルタリング
+                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+                            # indexリセット
+                            df.reset_index(drop=True, inplace=True)
+                except Exception:
+                    pass
+
+        if df is None or len(df.index) < 1:
+            try:
+                df = cls.__request_ohlcv_from_bybit(start_ut, end_ut, period, symbol, request_interval, ohlcv_kind)
+            except Exception as e:
+                pass
+
+        # 読み込んだcsvよりデータが増えている場合はcsv保存
+        ut = df['unixtime'].values
+        if len(df.index) > len_csv:
+            if ((csv_path is not None) and (len(csv_path) > 0)):
+                csv_dir = os.path.dirname(csv_path)
+                if not os.path.exists(csv_dir):
+                    os.makedirs(csv_dir)
+                df.to_csv(csv_path, header=True, index=False)
+                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+
+        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        return df
+
+    @classmethod
+    def __request_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', request_interval=1.0, ohlcv_kind='default'):
+        url_kind = {
+            'default': 'https://api.bybit.com/v2/public/kline/list',
+            'mark':    'https://api.bybit.com/v2/public/mark-price-kline',
+            'index':   'https://api.bybit.com/v2/public/index-price-kline',
+            'premium': 'https://api.bybit.com/v2/public/premium-index-kline',
+        }
+        url = url_kind[ohlcv_kind]
+        params = {
+            'symbol':symbol,
+            'interval':str(period),
+            'limit':200,
+        }
+
+        lst_ohlcv = []
+        cur_time = start_ut
+        add_time = int(period) * 60 * 200
+        retry_count = 0
+        while cur_time < end_ut:
+            try:
+                to_time = min(cur_time + add_time, end_ut)
+                params['from'] = int(cur_time)
+                res = requests.get(url, params, timeout=10)
+                res.raise_for_status()
+                result = res.json()['result']
+                if ohlcv_kind == 'default':
+                    lst = [[int(r['open_time']), float(r['open']), float(r['high']), float(r['low']), float(r['close']), int(r['volume'])] for r in result]
+                elif ohlcv_kind == 'mark':
+                    lst = [[int(r['start_at']), float(r['open']), float(r['high']), float(r['low']), float(r['close'])] for r in result]
+                else:
+                    lst = [[int(r['open_time']), float(r['open']), float(r['high']), float(r['low']), float(r['close'])] for r in result]
+                lst_ohlcv += lst
+                cur_time = to_time
+                time.sleep(request_interval)
+            except Exception as e:
+                print(f'Get ohlcv failed.(retry:{retry_count})\n{traceback.format_exc()}')
+                if retry_count > 5:
+                    raise e
+                retry_count += 1
+                time.sleep(2)
+                continue
+        # DataFrame生成
+        if ohlcv_kind == 'default':
+            df = pd.DataFrame(lst_ohlcv, columns=['unixtime', 'open', 'high', 'low', 'close', 'volume'])
+        else:
+            df = pd.DataFrame(lst_ohlcv, columns=['unixtime', 'open', 'high', 'low', 'close'])
+        if len(df.index) > 0:
+            # unixtimeソート
+            df.sort_values(by='unixtime', ascending=True, inplace=True)
+            # 重複行削除
+            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+            # 指定範囲フィルタリング
+            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+            # indexリセット
+            df.reset_index(drop=True, inplace=True)
+
+        return df
+
+    #---------------------------------------------------------------------------
+    # coinbase OHLCVを取得
+    # (取得件数:300/requestとなるため, 大量取得時はRateLimit注意)
+    #---------------------------------------------------------------------------
+    # [params]
+    #  start_ut / end_ut : UnixTimeで指定
+    #  period            : 分を指定 (1 or 5 or 15 or 60 or 360 or 1440)
+    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTC-USD)
+    #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+    #                      ファイルがない or 期間を満たしていない場合はrequestで取得
+    #                      csvファイル保存 (None or 空文字は保存しない)
+    #  request_interval  : 複数request時のsleep時間(sec)
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', csv_path='./coinbase_ohlcv.csv', request_interval=0.2):
+        df = None
+        len_csv = 0
+        if ((csv_path is not None) and (len(csv_path) > 0)):
+            if os.path.isfile(csv_path):
+                try:
+                    # csv読み込み
+                    df = pd.read_csv(csv_path)
+                    len_csv = len(df.index)
+                    if len_csv > 1:
+                        ut = df['unixtime'].values
+                        p = ut[1] - ut[0]
+                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        # period判定
+                        if p == period * 60:
+                            lst_df = []
+                            # csv先頭よりも開始日が過去の場合は不足分を取得
+                            if start_ut < ut[0]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_coinbase(start_ut, ut[0], period, symbol, request_interval)
+                                )
+                            lst_df.append(df)
+                            # csv末尾よりも終了日が未来の場合は不足分を取得
+                            if end_ut > ut[-1]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_coinbase(ut[-1], end_ut, period, symbol, request_interval)
+                                )
+                            # DataFrame結合＆unixtimeソート
+                            df = cls.concat_df(lst_df, sort_column='unixtime')
+                            # 重複行削除
+                            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+                            # 指定範囲フィルタリング
+                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+                            # indexリセット
+                            df.reset_index(drop=True, inplace=True)
+                except Exception:
+                    pass
+
+        if df is None or len(df.index) < 1:
+            try:
+                df = cls.__request_ohlcv_from_coinbase(start_ut, end_ut, period, symbol, request_interval)
+            except Exception:
+                pass
+
+        # 読み込んだcsvよりデータが増えている場合はcsv保存
+        ut = df['unixtime'].values
+        if len(df.index) > len_csv:
+            if ((csv_path is not None) and (len(csv_path) > 0)):
+                csv_dir = os.path.dirname(csv_path)
+                if not os.path.exists(csv_dir):
+                    os.makedirs(csv_dir)
+                df.to_csv(csv_path, header=True, index=False)
+                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+
+        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        return df
+
+    @classmethod
+    def __request_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', request_interval=0.5):
+        url = f'https://api.pro.coinbase.com/products/{symbol}/candles'
+        params = {
+            'granularity': str(int(period) * 60),
+        }
+
+        lst_ohlcv = []
+        cur_time = start_ut - int(period) * 60
+        add_time = int(period) * 60 * 300
+        retry_count = 0
+        while cur_time < end_ut:
+            try:
+                to_time = min(cur_time + add_time, end_ut)
+                params['start'] = datetime.fromtimestamp(cur_time, utc).isoformat()
+                params['end'] = datetime.fromtimestamp(to_time, utc).isoformat()
+                res = requests.get(url, params, timeout=10)
+                res.raise_for_status()
+                d = res.json()
+                lst_ohlcv += d
+                cur_time = to_time
+                time.sleep(request_interval)
+            except Exception as e:
+                print(f'Get ohlcv failed.(retry:{retry_count})\n{traceback.format_exc()}')
+                if retry_count > 5:
+                    raise e
+                retry_count += 1
+                time.sleep(2)
+                continue
+        # DataFrame生成
+        df = pd.DataFrame(lst_ohlcv, columns=['unixtime', 'open', 'high', 'low', 'close', 'volume'])
+        if len(df.index) > 0:
+            # unixtimeソート
+            df.sort_values(by='unixtime', ascending=True, inplace=True)
+            # 重複行削除
+            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+            # 指定範囲フィルタリング
+            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+            # indexリセット
+            df.reset_index(drop=True, inplace=True)
+
+        return df
+
+    #---------------------------------------------------------------------------
     # 約定履歴をOHLCVにリサンプリング
     #---------------------------------------------------------------------------
     # [params]

@@ -136,6 +136,44 @@ df_bybit_ohlcv = du.Tool.trade_to_ohlcv(df_bybit_trades, period='1T')
 #-------------------------------------------------------------------------------
 df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, period=1, symbol='XBTUSD', csv_path='./bitmex_ohlcv.csv', request_interval=0.5)
 
+#---------------------------------------------------------------------------
+# bybit OHLCVを取得
+# (取得件数:200/requestとなるため, 大量取得時はRateLimit注意)
+#---------------------------------------------------------------------------
+# [params]
+#  start_ut / end_ut : UnixTimeで指定
+#  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D' 'M' 'W')
+#  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTCUSD)
+#  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+#                      ファイルがない or 期間を満たしていない場合はrequestで取得
+#                      csvファイル保存 (None or 空文字は保存しない)
+#  request_interval  : 複数request時のsleep時間(sec)
+#  ohlcv_kind        : end point指定
+#                      'default':kline, 'mark':mark-price, 'index':index-price, 'premium':premium-index
+# [return]
+#  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', ('volume')]
+#---------------------------------------------------------------------------
+df_bybit_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_ohlcv.csv', ohlcv_kind='default')
+df_bybit_index_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_index_ohlcv.csv', ohlcv_kind='index')
+df_bybit_mark_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_mark_ohlcv.csv', ohlcv_kind='mark')
+df_bybit_premium_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_premium_ohlcv.csv', ohlcv_kind='premium')
+
+#---------------------------------------------------------------------------
+# coinbase OHLCVを取得
+# (取得件数:300/requestとなるため, 大量取得時はRateLimit注意)
+#---------------------------------------------------------------------------
+# [params]
+#  start_ut / end_ut : UnixTimeで指定
+#  period            : 分を指定 (1 or 5 or 15 or 60 or 360 or 1440)
+#  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTC-USD)
+#  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+#                      ファイルがない or 期間を満たしていない場合はrequestで取得
+#                      csvファイル保存 (None or 空文字は保存しない)
+#  request_interval  : 複数request時のsleep時間(sec)
+# [return]
+#  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+#---------------------------------------------------------------------------
+df_coinbase_ohlcv = du.Tool.get_ohlcv_from_coinbase(start_ut, end_ut, period=1, symbol='BTC-USD', request_interval=0.5)
 
 #-------------------------------------------------------------------------------
 # OHLCVを上位時間足にリサンプリング
