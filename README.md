@@ -323,6 +323,29 @@ df_execs = du.Tool.get_executions_from_bybit(api_key, api_secret, testnet=False,
 #---------------------------------------------------------------------------
 dfs = [df1, df2, df3, df4, df5]
 df_joined = du.Tool.outer_join_dfs(dfs, on_column='key_col', join_column='val_col', fillna=0, sort_index=True, is_summary=False)
+
+
+#---------------------------------------------------------------------------
+# 損益 統計情報取得
+#---------------------------------------------------------------------------
+# [params]
+#  lst_pnl       : 各取引毎の損益額リスト ([注意] 累積損益ではない)
+#  start_balance : 開始時残高
+# [return]
+#  dict (関数内のtrades_info参照)
+#---------------------------------------------------------------------------
+info = get_pnl_statistics(lst_pnl, start_balance)
+
+
+#---------------------------------------------------------------------------
+# 損益 統計情報出力
+#---------------------------------------------------------------------------
+# [params]
+#  lst_pnl       : 各取引毎の損益額リスト ([注意] 累積損益ではない)
+#  start_balance : 開始時残高
+#  round_digits  : 出力時の小数点以下桁数
+#---------------------------------------------------------------------------
+print_pnl_statistics(lst_pnl, start_balance, round_digits=4)
 ```
 
 ## GitHub Gist

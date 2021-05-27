@@ -1607,3 +1607,175 @@ class Tool(object):
 
         except Exception as e:
             print('outer_join_dfs failed.' + str(e))
+
+    #---------------------------------------------------------------------------
+    # 損益 統計情報取得
+    #---------------------------------------------------------------------------
+    # [params]
+    #  lst_pnl       : 各取引毎の損益額リスト ([注意] 累積損益ではない)
+    #  start_balance : 開始時残高
+    # [return]
+    #  dict (関数内のtrades_info参照)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_pnl_statistics(cls, lst_pnl, start_balance):
+        try:
+            trades_info = {
+                'trades' : {
+                    'pf'           : 0, # PF
+                    'count'        : 0, # 総取引回数
+                    'sum'          : 0, # 総損益
+                    'mean'         : 0, # 平均損益
+                    'maxdd'        : 0, # 最大DD
+                    'maxdd_ratio'  : 0, # 最大DD率
+                    'start_balance': 0, # 開始時残高
+                    'end_balance'  : 0, # 終了時残高
+                    'balance_ratio': 0, # 残高増減率
+                },
+                'profit' : {
+                    'ratio'        : 0, # 勝取引率
+                    'count'        : 0, # 勝取引数
+                    'sum'          : 0, # 総利益
+                    'max'          : 0, # 最大利益(1取引あたり)
+                    'mean'         : 0, # 平均利益
+                    'maxlen_count' : 0, # 最大連勝数
+                    'maxlen_sum'   : 0, # 最大連勝利益
+                },
+                'loss' : {
+                    'ratio'        : 0, # 負取引率
+                    'count'        : 0, # 負取引数
+                    'sum'          : 0, # 総損失
+                    'max'          : 0, # 最大損失(1取引あたり)
+                    'mean'         : 0, # 平均損失
+                    'maxlen_count' : 0, # 最大連敗数
+                    'maxlen_sum'   : 0, # 最大連敗損失
+                },
+            }
+
+            if lst_pnl is None or len(lst_pnl) < 1:
+                print('lst_pnl is not exists.')
+                return trades_info
+
+            trades = trades_info['trades']
+            profit = trades_info['profit']
+            loss   = trades_info['loss']
+
+            np_pnl = np.array(lst_pnl)
+            np_profit = np_pnl[np_pnl > 0]
+            np_loss = np_pnl[np_pnl < 0]
+
+            trades['count'] = len(np_pnl)
+            trades['sum']   = np_pnl.sum()
+            trades['mean']  = np_pnl.mean()
+
+            # 最大DD計算
+            np_cumsum = np_pnl.cumsum() + start_balance
+            np_maxacc = np.maximum.accumulate(np_cumsum)
+            np_dd = np_cumsum - np_maxacc
+            np_dd_ratio = np_dd / (np_cumsum - np_dd)
+            i = np.argmin(np_dd_ratio)
+            trades['maxdd_ratio'] = np_dd_ratio[i]
+            trades['maxdd'] = np_dd[i]
+
+            trades['start_balance'] = start_balance
+            trades['end_balance'] = np_cumsum[-1]
+            if start_balance > 0:
+                trades['balance_ratio'] = (trades['end_balance'] - start_balance) / start_balance
+
+            len_p = len(np_profit)
+            if len_p > 0:
+                profit['count'] = len_p
+                profit['sum']   = np_profit.sum()
+                profit['max']   = np_profit.max()
+                profit['mean']  = np_profit.mean()
+            len_l = len(np_loss)
+            if len_l > 0:
+                loss['count'] = len_l
+                loss['sum']   = np_loss.sum()
+                loss['max']   = np_loss.min()
+                loss['mean']  = np_loss.mean()
+            if (len_p + len_l) > 0:
+                profit['ratio'] = len_p / (len_p + len_l)
+                loss['ratio']   = len_l / (len_p + len_l)
+            if loss['sum'] != 0:
+                trades['pf'] = abs(profit['sum'] / loss['sum'])
+
+            # 最大連勝/連敗計算
+            np_nonzero = np_pnl[np_pnl != 0]
+            if len(np_nonzero) > 0:
+                group_sum = [[key, list(group)] for key, group in groupby(np_nonzero, key=lambda x: x > 0)]
+                # 連勝
+                df_group_sum = pd.DataFrame([[len(i[1]), sum(i[1])] for i in group_sum if i[0]==True], columns=['count', 'sum'])
+                if len(df_group_sum.index > 0):
+                    idxmax = df_group_sum['count'].idxmax()
+                    profit['maxlen_count'] = df_group_sum['count'].iloc[idxmax]
+                    profit['maxlen_sum']   = df_group_sum['sum'].iloc[idxmax]
+                # 連敗
+                df_group_sum = pd.DataFrame([[len(i[1]), sum(i[1])] for i in group_sum if i[0]==False], columns=['count', 'sum'])
+                if len(df_group_sum.index > 0):
+                    idxmax = df_group_sum['count'].idxmax()
+                    loss['maxlen_count'] = df_group_sum['count'].iloc[idxmax]
+                    loss['maxlen_sum']   = df_group_sum['sum'].iloc[idxmax]
+
+            return trades_info
+
+        except Exception as e:
+            print(f'get_pnl_statistics failed.\n{traceback.format_exc()}')
+            raise e
+
+    #---------------------------------------------------------------------------
+    # 損益 統計情報出力
+    #---------------------------------------------------------------------------
+    # [params]
+    #  lst_pnl       : 各取引毎の損益額リスト ([注意] 累積損益ではない)
+    #  start_balance : 開始時残高
+    #  round_digits  : 出力時の小数点以下桁数
+    # [output example]
+    #  [Profit and loss statistics]  PF: 2.00
+    #    [Balance ] Result: 7,179.0 -> 55,518.0 (+673.35%)  PnL: +48,339.0  Avr: +452.0
+    #    [Trade   ] Count:  107  PnL: +48,339.0  Avr: +452.0
+    #    [Profit  ] Count:  37 (34.58%)  Sum: +96,696.0  Avr: +2,613.0  Max: +18,497.0  MaxLen: 4 (+1,316.0)
+    #    [Loss    ] Count:  70 (65.42%)  Sum: -48,357.0  Avr: -691.0  Max: -3,477.0  MaxLen: 8 (-2,318.0)
+    #    [Max risk] Drawdown: -37.82% (-3,930.0)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def print_pnl_statistics(cls, lst_pnl, start_balance, round_digits=4):
+        try:
+            # 統計情報算出
+            info = cls.get_pnl_statistics(lst_pnl, start_balance)
+            t = info['trades']
+            p = info['profit']
+            l = info['loss']
+            t_sum = round(t['sum'], round_digits)
+            t_avr = round(t['mean'], round_digits)
+            t_dd = round(t['maxdd'], round_digits)
+            t_sb = round(t['start_balance'], round_digits)
+            t_eb = round(t['end_balance'], round_digits)
+            t_ratio = round(t['balance_ratio'], round_digits+4)
+            p_ratio = round(p['ratio'], round_digits+4)
+            p_sum = round(p['sum'], round_digits)
+            p_avr = round(p['mean'], round_digits)
+            p_max = round(p['max'], round_digits)
+            p_lensum = round(p['maxlen_sum'], round_digits)
+            l_ratio = round(l['ratio'], round_digits+4)
+            l_sum = round(l['sum'], round_digits)
+            l_avr = round(l['mean'], round_digits)
+            l_max = round(l['max'], round_digits)
+            l_lensum = round(l['maxlen_sum'], round_digits)
+            message  = f'[Profit and loss statistics]  PF: {t["pf"]:.2f}\n'
+            message += f'  [Balance ] '
+            message += f'Result: {t_sb:,} -> {t_eb:,} ({t_ratio:+.2%})  PnL: {t_sum:+,}  Avr: {t_avr:+,}\n'
+            message += f'  [Trade   ] '
+            message += f'Count:  {t["count"]}  PnL: {t_sum:+,}  Avr: {t_avr:+,}\n'
+            message += f'  [Profit  ] '
+            message += f'Count:  {p["count"]} ({p_ratio:.2%})  Sum: {p_sum:+,}  Avr: {p_avr:+,}  Max: {p_max:+,}  MaxLen: {p["maxlen_count"]} ({p_lensum:+,})\n'
+            message += f'  [Loss    ] '
+            message += f'Count:  {l["count"]} ({l_ratio:.2%})  Sum: {l_sum:+,}  Avr: {l_avr:+,}  Max: {l_max:+,}  MaxLen: {l["maxlen_count"]} ({l_lensum:+,})\n'
+            message += f'  [Max risk] '
+            message += f'Drawdown: {t["maxdd_ratio"]:.2%} ({t_dd:+,})\n'
+
+            print(message)
+
+        except Exception as e:
+            print(f'print_pnl_statistics failed.\n{traceback.format_exc()}')
+            raise e
