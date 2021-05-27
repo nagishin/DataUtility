@@ -344,6 +344,13 @@ info = get_pnl_statistics(lst_pnl, start_balance)
 #  lst_pnl       : 各取引毎の損益額リスト ([注意] 累積損益ではない)
 #  start_balance : 開始時残高
 #  round_digits  : 出力時の小数点以下桁数
+# [output example]
+#  [Profit and loss statistics]  PF: 2.00
+#    [Balance ] Result: 7,179.0 -> 55,518.0 (+673.35%)  PnL: +48,339.0  Avr: +452.0
+#    [Trade   ] Count:  107  PnL: +48,339.0  Avr: +452.0
+#    [Profit  ] Count:  37 (34.58%)  Sum: +96,696.0  Avr: +2,613.0  Max: +18,497.0  MaxLen: 4 (+1,316.0)
+#    [Loss    ] Count:  70 (65.42%)  Sum: -48,357.0  Avr: -691.0  Max: -3,477.0  MaxLen: 8 (-2,318.0)
+#    [Max risk] Drawdown: -37.82% (-3,930.0)
 #---------------------------------------------------------------------------
 print_pnl_statistics(lst_pnl, start_balance, round_digits=4)
 ```
