@@ -213,6 +213,42 @@ class Chart:
                 self.__indicators[ax].append(indi)
             else:
                 self.__indicators[ax] = [indi]
+
+        # converter自動設定
+        if self.__xaxis['converter'] == None:
+            col_x = None
+            if self.__xaxis['col'] == None:
+                col_x = self.__df.index.values
+            else:
+                col_x = self.__df[self.__xaxis['col']].values
+
+            if col_x is None or len(col_x) < 2:
+                pass
+            else:
+                unit = 0
+                x0 = col_x[0]
+                x1 = col_x[1]
+                if isinstance(x0, np.datetime64):
+                    self.__xaxis['converter'] = Chart.to_date_format
+                    unit = pd.to_datetime(x1).timestamp() - pd.to_datetime(x0).timestamp()
+                elif isinstance(x0, datetime):
+                    self.__xaxis['converter'] = Chart.to_date_format
+                    unit = x1.timestamp() - x0.timestamp()
+                elif Chart.is_numeric(x0) and (x0 > 1000000000):
+                    self.__xaxis['converter'] = Chart.to_date_format
+                    unit = x1 - x0
+
+                if unit == 0:
+                    pass
+                elif unit < 60:
+                    Chart.FormatX = '%m/%d %H:%M:%S'
+                elif unit < 3600:
+                    Chart.FormatX = '%m/%d %H:%M'
+                elif unit < 86400:
+                    Chart.FormatX = '%m/%d %H:%M'
+                else:
+                    Chart.FormatX = '%y/%m/%d'
+
         return self
 
     #---------------------------------------------------------------------------
@@ -525,15 +561,15 @@ class Chart:
     #---------------------------------------------------------------------------
     @classmethod
     def to_date_format(cls, x):
-        # UnixTime
-        if Chart.is_numeric(x) and x > 1000000000:
-            return pd.to_datetime(x, unit='s').strftime(cls.FormatX)
+        # numpy.datetime64
+        if isinstance(x, np.datetime64):
+            return pd.to_datetime(x).strftime(cls.FormatX)
         # datetime
         elif isinstance(x, datetime):
             return x.strftime(cls.FormatX)
-        # numpy.datetime64
-        elif isinstance(x, np.datetime64):
-            return pd.to_datetime(x).strftime(cls.FormatX)
+        # UnixTime
+        elif Chart.is_numeric(x) and x > 1000000000:
+            return pd.to_datetime(x, unit='s').strftime(cls.FormatX)
         else:
             return x
 
