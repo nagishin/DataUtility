@@ -5,7 +5,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import mpl_finance as mpf
+#import mpl_finance as mpf
+import mplfinance.original_flavor as mpf
 from matplotlib import ticker
 import japanize_matplotlib
 import seaborn as sns
@@ -475,9 +476,9 @@ class Chart:
             if grid + g == total_grid:
                 ax.xaxis.set_major_locator(ticker.MaxNLocator(10))
                 if self.__xaxis['col'] in self.__df.columns:
-                    xcol = self.__df[self.__xaxis['col']]
+                    xcol = self.__df[self.__xaxis['col']].values
                 else:
-                    xcol = self.__df.index
+                    xcol = self.__df.index.values
                 def mydate(x, pos):
                     try:
                         if self.__xaxis['converter'] == None:

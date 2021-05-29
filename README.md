@@ -353,6 +353,7 @@ info = get_pnl_statistics(lst_pnl, start_balance)
 #    [Max risk] Drawdown: -37.82% (-3,930.0)
 #---------------------------------------------------------------------------
 print_pnl_statistics(lst_pnl, start_balance, round_digits=4)
+```
 
 
 ## 3. Chartクラス
@@ -417,7 +418,7 @@ chart.set_size(width=16, height=12)
 # また、任意の変換関数をconverterに設定することでX軸に適用可能
 #  ex) set_x(col=None, grid=True, converter=lambda x: f'{x} sec')
 #---------------------------------------------------------------------------
-chart.set_x(col=None, grid=True, converter=Chart.to_date_format, format='%m/%d')
+chart.set_x(col=None, grid=True, converter=du.Chart.to_date_format, format='%m/%d')
 
 #---------------------------------------------------------------------------
 # Y軸設定
