@@ -30,7 +30,9 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'side', 'size', 'price']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_trades_from_bybit(cls, start_ut, end_ut, symbol='BTCUSD', csv_path='./bybit_trades.csv'):
+    def get_trades_from_bybit(cls, start_ut, end_ut, symbol='BTCUSD', csv_path=None):
+        if csv_path is None:
+            csv_path = f'./bybit_{symbol}_trades.csv'
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
@@ -104,9 +106,11 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path='./bitmex_ohlcv.csv', request_interval=0.5):
+    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=0.5):
         df = None
         len_csv = 0
+        if csv_path is None:
+            csv_path = f'./bitmex_{symbol}_ohlcv_{period}.csv'
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
@@ -218,9 +222,11 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', ('volume')]
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', csv_path='./bybit_ohlcv.csv', request_interval=1.0, ohlcv_kind='default'):
+    def get_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', csv_path=None, request_interval=1.0, ohlcv_kind='default'):
         df = None
         len_csv = 0
+        if csv_path is None:
+            csv_path = f'./bybit_{symbol}_ohlcv_{period}_{ohlcv_kind}.csv'
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
@@ -350,9 +356,11 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', csv_path='./coinbase_ohlcv.csv', request_interval=0.2):
+    def get_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', csv_path=None, request_interval=0.2):
         df = None
         len_csv = 0
+        if csv_path is None:
+            csv_path = f'./coinbase_{symbol}_ohlcv_{period}.csv'
         if ((csv_path is not None) and (len(csv_path) > 0)):
             if os.path.isfile(csv_path):
                 try:
