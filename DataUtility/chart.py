@@ -549,6 +549,8 @@ class Chart:
             if k in self.__yaxis.keys():
                 # Y軸グリッド
                 ax.yaxis.grid(self.__yaxis[k]['grid'], which='major', linestyle='dotted', color='lightgray')
+                # Y軸ラベル
+                ax.set_ylabel(self.__yaxis[k]['title'], fontsize=12, color='dimgray')
                 # 凡例表示
                 if self.__yaxis[k]['legend'] and has_label:
                     ax.legend()
