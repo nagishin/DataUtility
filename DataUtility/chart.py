@@ -40,6 +40,7 @@ class Chart:
         Chart.FormatX = '%y/%m/%d %H:%M:%S'
         self.__width = 16
         self.__height = 12
+        self.__dpi = 100
         self.__title = {'title':None, 'loc':'center', 'fontsize':16,}
         self.__xaxis = {'col':None, 'grid':True, 'converter':None,}
         self.__yaxis = {0:{'title':None, 'grid':True, 'legend':False, 'gridspec':1},}
@@ -77,12 +78,15 @@ class Chart:
     # [params]
     #  width    : チャート幅
     #  height   : チャート高さ
+    #  dpi      : DPI
     #---------------------------------------------------------------------------
-    def set_size(self, width: int=16, height: int=12):
+    def set_size(self, width: int=16, height: int=12, dpi: int=100):
         if Chart.is_numeric(width) and width > 0:
             self.__width = width
         if Chart.is_numeric(height) and height > 0:
             self.__height = height
+        if Chart.is_numeric(dpi) and dpi > 0:
+            self.__dpi = dpi
         return self
 
     #---------------------------------------------------------------------------
@@ -434,8 +438,10 @@ class Chart:
         if self.__fig == None:
             self.__create()
         # pngファイル出力
-        plt.savefig(filepath, bbox_inches='tight', pad_inches=0.2, transparent=False)
+        plt.savefig(filepath, dpi=self.__dpi, bbox_inches='tight', pad_inches=0.2, transparent=False)
         plt.close()
+        # plot設定初期化
+        plt.rcdefaults()
 
     #---------------------------------------------------------------------------
     # チャート作成
@@ -445,7 +451,7 @@ class Chart:
         matplotlib.rcParams['axes.xmargin'] = 0.001 # X軸
         matplotlib.rcParams['axes.ymargin'] = 0.05  # Y軸
         # グラフ設定
-        self.__fig = plt.figure(figsize=(self.__width, self.__height))
+        self.__fig = plt.figure(figsize=(self.__width, self.__height), dpi=self.__dpi)
         self.__fig.autofmt_xdate()
         plt.subplots_adjust(wspace=0.0, hspace=0.0) # グラフ間余白
 
