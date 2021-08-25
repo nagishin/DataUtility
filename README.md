@@ -334,7 +334,7 @@ df_joined = du.Tool.outer_join_dfs(dfs, on_column='key_col', join_column='val_co
 # [return]
 #  dict (関数内のtrades_info参照)
 #---------------------------------------------------------------------------
-info = get_pnl_statistics(lst_pnl, start_balance)
+info = du.Tool.get_pnl_statistics(lst_pnl, start_balance)
 
 
 #---------------------------------------------------------------------------
@@ -352,7 +352,67 @@ info = get_pnl_statistics(lst_pnl, start_balance)
 #    [Loss    ] Count:  70 (65.42%)  Sum: -48,357.0  Avr: -691.0  Max: -3,477.0  MaxLen: 8 (-2,318.0)
 #    [Max risk] Drawdown: -37.82% (-3,930.0)
 #---------------------------------------------------------------------------
-print_pnl_statistics(lst_pnl, start_balance, round_digits=4)
+du.Tool.print_pnl_statistics(lst_pnl, start_balance, round_digits=4)
+
+
+#---------------------------------------------------------------------------
+# bybit約定履歴を日別にOHLCVにリサンプリングしてcsv出力
+# (https://public.bybit.com/trading/:symbol/ より)
+#---------------------------------------------------------------------------
+# [params]
+#  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+#                        取得可能期間 : 2019-10-01以降かつ前日まで
+#  symbol              : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+#  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+#  output_dir          : 日別csvを出力するディレクトリパス (Noneは'./bybit/{symbol}/ohlcv/{period}/')
+#  request_interval    : 複数request時のsleep時間(sec)
+#  progress_info       : 処理途中経過をprint
+#---------------------------------------------------------------------------
+start_ymd        = '2021/08/01'
+end_ymd          = '2021/08/10'
+symbol           = 'BTCUSD'
+period           = '1S'
+output_dir       = None
+request_interval = 0.0
+progress_info    = True
+
+du.Tool.save_daily_ohlcv_from_bybit_trading_gz(start_ymd, end_ymd, symbol, period, output_dir, request_interval, progress_info)
+
+
+#---------------------------------------------------------------------------
+# ディレクトリ内の日別OHLCVをまとめて上位時間足にリサンプリングしてcsv出力
+#---------------------------------------------------------------------------
+# [params]
+#  input_dir     : 日別csvの入力ディレクトリパス
+#  output_dir    : 日別csvの出力ディレクトリパス
+#  period        : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+#  progress_info : 処理途中経過をprint
+#---------------------------------------------------------------------------
+input_dir     = './bybit/BTCUSD/ohlcv/1S/'
+output_dir    = './bybit/BTCUSD/ohlcv/1T/'
+period        = '1T'
+progress_info = True
+
+du.Tool.downsample_daily_ohlcv(input_dir, output_dir, period, progress_info)
+
+
+#---------------------------------------------------------------------------
+# 日別OHLCVから指定期間のOHLCVを1つのDataFrameにまとめて取得
+# (periodにてリサンプリング指定可能)
+#---------------------------------------------------------------------------
+# [params]
+#  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+#  csv_dir             : 読み込む日別csvが格納されているディレクトリパス
+#  ignore_defect       : 取得期間中に日別csvが存在しなかった場合に無視して継続するか (True:無視し継続, False:エラー)
+#  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+#---------------------------------------------------------------------------
+start_ymd     = '2021/08/01'
+end_ymd       = '2021/08/03'
+csv_dir       = './bybit/BTCUSD/ohlcv/1T/'
+ignore_defect = False
+period        = '1H'
+
+df_ohlcv = du.Tool.get_ohlcv_from_daily_csv(start_ymd, end_ymd, csv_dir, ignore_defect, period)
 ```
 
 

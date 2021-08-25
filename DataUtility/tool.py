@@ -4,6 +4,7 @@ import time
 import requests
 import json
 import traceback
+import glob
 from datetime import datetime, timedelta
 from pytz import utc, timezone
 from collections import OrderedDict
@@ -12,6 +13,8 @@ import pandas as pd
 from inspect import currentframe
 import pybybit
 from itertools import groupby
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class Tool(object):
 
@@ -1786,4 +1789,191 @@ class Tool(object):
 
         except Exception as e:
             print(f'print_pnl_statistics failed.\n{traceback.format_exc()}')
+            raise e
+
+    #---------------------------------------------------------------------------
+    # bybit約定履歴を日別にOHLCVにリサンプリングしてcsv出力
+    # (https://public.bybit.com/trading/:symbol/ より)
+    #---------------------------------------------------------------------------
+    # [params]
+    #  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+    #                        取得可能期間 : 2019-10-01以降かつ前日まで
+    #  symbol              : 取得対象の通貨ペアシンボル名（デフォルトは BTCUSD）
+    #  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+    #  output_dir          : 日別csvを出力するディレクトリパス (Noneは'./bybit/{symbol}/ohlcv/{period}/')
+    #  request_interval    : 複数request時のsleep時間(sec)
+    #  progress_info       : 処理途中経過をprint
+    #---------------------------------------------------------------------------
+    @classmethod
+    def save_daily_ohlcv_from_bybit_trading_gz(cls, start_ymd:str, end_ymd:str, symbol:str='BTCUSD', period:str='1S',
+                                                output_dir:str=None, request_interval:float=1.0, progress_info:bool=True) -> None:
+        try:
+            # 出力ディレクトリ設定
+            if output_dir is None:
+                output_dir = f'./bybit/{symbol}/ohlcv/{period}/'
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            # 取得期間
+            start_dt = datetime.strptime(start_ymd, '%Y/%m/%d')
+            end_dt = datetime.strptime(end_ymd, '%Y/%m/%d')
+            if start_dt > end_dt:
+                raise ValueError(f'end_ymd{end_ymd} should be after start_ymd{start_ymd}.')
+
+            print(f'output dir: {output_dir}  save term: {start_dt:%Y/%m/%d} -> {end_dt:%Y/%m/%d}')
+
+            # 日別にcsv出力
+            cur_dt = start_dt
+            total_count = 0
+            while cur_dt <= end_dt:
+                # csvパス
+                csv_path = os.path.join(output_dir, f'{cur_dt:%Y%m%d}.csv')
+                # csv存在チェック
+                if os.path.isfile(csv_path):
+                    cur_dt += timedelta(days=1)
+                    continue
+
+                df = None
+                try:
+                    df = pd.read_csv(f'https://public.bybit.com/trading/{symbol}/{symbol}{cur_dt:%Y-%m-%d}.csv.gz',
+                                     compression='gzip',
+                                     usecols=['timestamp', 'side', 'price', 'size'],
+                                     dtype={'timestamp':'float', 'side':'str', 'price':'float', 'size':'int'})
+                except Exception:
+                    print('read_csv error', traceback.format_exc())
+                    df = None
+
+                if df is None or len(df.index) < 1:
+                    print(f'Failed to read the trading file.({symbol}{cur_dt:%Y-%m-%d}.csv.gz)')
+                    cur_dt += timedelta(days=1)
+                    if request_interval > 0:
+                        time.sleep(request_interval)
+                    continue
+
+                # 列名変更
+                df.rename(columns={'timestamp': 'unixtime'}, inplace=True)
+
+                # trade -> ohlcvリサンプリング
+                df_ohlcv = cls.trade_to_ohlcv(df, period)
+
+                # csv出力
+                df_ohlcv.to_csv(csv_path, header=True, index=False)
+                total_count += 1
+                if progress_info:
+                    print(f'Completed output {cur_dt:%Y%m%d}.csv')
+
+                cur_dt += timedelta(days=1)
+                if request_interval > 0:
+                    time.sleep(request_interval)
+
+            print(f'Total output files: {total_count}')
+
+        except Exception as e:
+            print(f'save_daily_ohlcv_from_bybit_trading_gz failed.\n{traceback.format_exc()}')
+            raise e
+
+    #---------------------------------------------------------------------------
+    # ディレクトリ内の日別OHLCVをまとめて上位時間足にリサンプリングしてcsv出力
+    #---------------------------------------------------------------------------
+    # [params]
+    #  input_dir     : 日別csvの入力ディレクトリパス
+    #  output_dir    : 日別csvの出力ディレクトリパス
+    #  period        : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+    #  progress_info : 処理途中経過をprint
+    #---------------------------------------------------------------------------
+    @classmethod
+    def downsample_daily_ohlcv(cls, input_dir:str, output_dir:str, period:str='1T', progress_info:bool=True) -> None:
+        try:
+            # 入力ディレクトリチェック
+            if not os.path.exists(input_dir):
+                raise ValueError(f'Not exists input dir.({input_dir})')
+            # 出力ディレクトリチェック
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            print(f'input dir: {output_dir} -> output dir: {output_dir}  period: {period}')
+
+            # 入力ディレクトリのファイル一覧をリスト形式で取得
+            input_files = glob.glob(input_dir + '*.csv')
+
+            # 日別csv読み込み
+            total_count = 0
+            for input_path in input_files:
+                input_csv = os.path.basename(input_path)
+                # 出力ファイル存在チェック
+                output_path = os.path.join(output_dir, input_csv)
+                if os.path.isfile(output_path) == False:
+                    # csv読み込み
+                    df = pd.read_csv(input_path)
+                    # 指定periodにリサンプリング
+                    df_ohlcv = cls.downsample_ohlcv(df, period)
+                    # csv出力
+                    df_ohlcv.to_csv(output_path, header=True, index=False)
+                    total_count += 1
+                    if progress_info:
+                        print(f'Completed output {input_csv}')
+
+            print(f'Total output files: {total_count}')
+
+        except Exception as e:
+            print(f'downsample_daily_ohlcv failed.\n{traceback.format_exc()}')
+            raise e
+
+    #---------------------------------------------------------------------------
+    # 日別OHLCVから指定期間のOHLCVを1つのDataFrameにまとめて取得
+    # (periodにてリサンプリング指定可能)
+    #---------------------------------------------------------------------------
+    # [params]
+    #  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+    #  csv_dir             : 読み込む日別csvが格納されているディレクトリパス
+    #  ignore_defect       : 取得期間中に日別csvが存在しなかった場合に無視して継続するか (True:無視し継続, False:エラー)
+    #  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_ohlcv_from_daily_csv(cls, start_ymd:str, end_ymd:str, csv_dir:str, ignore_defect:bool=False, period:str=None) -> pd.DataFrame:
+        try:
+            if not os.path.exists(csv_dir):
+                raise ValueError(f'Not exists csv dir.({csv_dir})')
+
+            # 取得期間
+            start_dt = datetime.strptime(start_ymd, '%Y/%m/%d')
+            end_dt = datetime.strptime(end_ymd, '%Y/%m/%d')
+            if start_dt > end_dt:
+                raise ValueError(f'end_ymd{end_ymd} should be after start_ymd{start_ymd}.')
+
+            # 日別csv読み込み
+            ohlcvs = []
+            cur_dt = start_dt
+            while cur_dt <= end_dt:
+                # csvパス
+                csv_path = os.path.join(csv_dir, f'{cur_dt:%Y%m%d}.csv')
+                # csv存在チェック
+                if os.path.isfile(csv_path):
+                    # csv読み込み
+                    ohlcvs.append(pd.read_csv(csv_path))
+                else:
+                    error_msg = f'Not exists csv file.({cur_dt:%Y%m%d}.csv)'
+                    if ignore_defect:
+                        print(error_msg)
+                    else:
+                        raise ValueError(error_msg)
+                cur_dt += timedelta(days=1)
+
+            # リストを全て行方向に結合
+            # axis=0:行方向に結合, sort
+            df = pd.concat(ohlcvs, axis=0, sort=True)
+
+            # period指定の場合はリサンプリング
+            if period != None:
+                df_ohlcv = cls.downsample_ohlcv(df, period)
+            else:
+                df_ohlcv = df
+
+            # indexリセット
+            df_ohlcv.reset_index(drop=True, inplace=True)
+
+            return df_ohlcv
+    
+        except Exception as e:
+            print(f'get_ohlcv_from_daily_csv failed.\n{traceback.format_exc()}')
             raise e
