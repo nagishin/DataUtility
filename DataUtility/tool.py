@@ -1854,7 +1854,20 @@ class Tool(object):
                 df.rename(columns={'timestamp': 'unixtime'}, inplace=True)
 
                 # trade -> ohlcvリサンプリング
-                df_ohlcv = cls.trade_to_ohlcv(df, period)
+                #df_ohlcv = cls.trade_to_ohlcv(df, period)
+
+                # DatetimeIndex設定
+                df['datetime'] = pd.to_datetime(df['unixtime'], unit='s', utc=True)
+                df.set_index('datetime', inplace=True)
+
+                # trade -> ohlcvリサンプリング
+                df_ohlcv = df.resample(period).agg({
+                                            'price' : 'ohlc',
+                                            'size'  : 'sum',}).ffill()
+                df_ohlcv.columns = ['open', 'high', 'low', 'close', 'volume']
+                df_ohlcv['unixtime'] = df_ohlcv.index.astype(np.int64) / 10**9
+                df_ohlcv['unixtime'] = df_ohlcv.unixtime.astype(np.int64)
+                df_ohlcv = df_ohlcv[['unixtime', 'open', 'high', 'low', 'close', 'volume']]
 
                 # csv出力
                 df_ohlcv.to_csv(csv_path, header=True, index=False)
@@ -1905,8 +1918,25 @@ class Tool(object):
                 if os.path.isfile(output_path) == False:
                     # csv読み込み
                     df = pd.read_csv(input_path)
+
                     # 指定periodにリサンプリング
-                    df_ohlcv = cls.downsample_ohlcv(df, period)
+                    #df_ohlcv = cls.downsample_ohlcv(df, period)
+
+                    # DatetimeIndex設定
+                    df['datetime'] = pd.to_datetime(df['unixtime'], unit='s', utc=True)
+                    df.set_index('datetime', inplace=True)
+
+                    # 指定periodにリサンプリング
+                    df_ohlcv = df.resample(period).agg({
+                                        'open'   : 'first',
+                                        'high'   : 'max',
+                                        'low'    : 'min',
+                                        'close'  : 'last',
+                                        'volume' : 'sum',})
+                    df_ohlcv['unixtime'] = df_ohlcv.index.astype(np.int64) / 10**9
+                    df_ohlcv['unixtime'] = df_ohlcv.unixtime.astype(np.int64)
+                    df_ohlcv = df_ohlcv[['unixtime', 'open', 'high', 'low', 'close', 'volume']]
+
                     # csv出力
                     df_ohlcv.to_csv(output_path, header=True, index=False)
                     total_count += 1
@@ -1965,7 +1995,23 @@ class Tool(object):
 
             # period指定の場合はリサンプリング
             if period != None:
-                df_ohlcv = cls.downsample_ohlcv(df, period)
+                #df_ohlcv = cls.downsample_ohlcv(df, period)
+
+                # DatetimeIndex設定
+                df['datetime'] = pd.to_datetime(df['unixtime'], unit='s', utc=True)
+                df.set_index('datetime', inplace=True)
+
+                # 指定periodにリサンプリング
+                df_ohlcv = df.resample(period).agg({
+                                    'open'   : 'first',
+                                    'high'   : 'max',
+                                    'low'    : 'min',
+                                    'close'  : 'last',
+                                    'volume' : 'sum',})
+                df_ohlcv['unixtime'] = df_ohlcv.index.astype(np.int64) / 10**9
+                df_ohlcv['unixtime'] = df_ohlcv.unixtime.astype(np.int64)
+                df_ohlcv = df_ohlcv[['unixtime', 'open', 'high', 'low', 'close', 'volume']]
+
             else:
                 df_ohlcv = df
 
