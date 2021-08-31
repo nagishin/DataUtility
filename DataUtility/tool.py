@@ -1885,6 +1885,101 @@ class Tool(object):
             print(f'save_daily_ohlcv_from_bybit_trading_gz failed.\n{traceback.format_exc()}')
             raise e
 
+    # ---------------------------------------------------------------------------
+    # GMO約定履歴を日別にOHLCVにリサンプリングしてcsv出力
+    # (https://api.coin.z.com/data/trades/:symbol/ より)
+    # ---------------------------------------------------------------------------
+    # [params]
+    #  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+    #                        取得可能期間 : 2019-10-01以降かつ前日まで
+    #  symbol              : 取得対象の通貨ペアシンボル名（デフォルトは BTC_JPY）
+    #  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+    #  output_dir          : 日別csvを出力するディレクトリパス (Noneは'./gmo/{symbol}/ohlcv/{period}/')
+    #  request_interval    : 複数request時のsleep時間(sec)
+    #  progress_info       : 処理途中経過をprint
+    # ---------------------------------------------------------------------------
+    @classmethod
+    def save_daily_ohlcv_from_gmo_trading_gz(cls, start_ymd: str, end_ymd: str, symbol: str = 'BTC_JPY',
+                                             period: str = '1S', output_dir: str = None, request_interval: float = 1.0,
+                                             progress_info: bool = True) -> None:
+
+        try:
+            # 出力ディレクトリ設定
+            if output_dir is None:
+                output_dir = f'./gmo/{symbol}/ohlcv/{period}/'
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            # 取得期間
+            start_dt = datetime.strptime(start_ymd, '%Y/%m/%d')
+            end_dt = datetime.strptime(end_ymd, '%Y/%m/%d')
+            if start_dt > end_dt:
+                raise ValueError(f'end_ymd{end_ymd} should be after start_ymd{start_ymd}.')
+
+            print(f'output dir: {output_dir}  save term: {start_dt:%Y/%m/%d} -> {end_dt:%Y/%m/%d}')
+
+            # 日別にcsv出力
+            cur_dt = start_dt
+            total_count = 0
+            while cur_dt <= end_dt:
+                # csvパス
+                csv_path = os.path.join(output_dir, f'{cur_dt:%Y%m%d}.csv')
+                # csv存在チェック
+                if os.path.isfile(csv_path):
+                    cur_dt += timedelta(days=1)
+                    continue
+
+                try:
+                    df = pd.read_csv(
+                        f'https://api.coin.z.com/data/trades/{symbol}/{cur_dt:%Y}/{cur_dt:%m}/{cur_dt:%Y%m%d}_{symbol}.csv.gz',
+                        compression='gzip',
+                        usecols=['timestamp', 'side', 'price', 'size'],
+                        dtype={'timestamp': 'str', 'side': 'str', 'price': 'float', 'size': 'float'},
+                        parse_dates=['timestamp'])
+                except Exception as e:
+                    print(f'{e}\nread_csv error', traceback.format_exc())
+                    df = None
+
+                if df is None or len(df.index) < 1:
+                    print(f'Failed to read the trading file.({symbol}{cur_dt:%Y-%m-%d}.csv.gz)')
+                    cur_dt += timedelta(days=1)
+                    if request_interval > 0:
+                        time.sleep(request_interval)
+                    continue
+
+                # 列名変更
+                df.rename(columns={'timestamp': 'datetime'}, inplace=True)
+
+                # trade -> ohlcvリサンプリング
+                # df_ohlcv = cls.trade_to_ohlcv(df, period)
+
+                # DatetimeIndex設定
+                df.set_index('datetime', inplace=True)
+
+                # trade -> ohlcvリサンプリング
+                df_ohlcv = pd.concat([df["price"].resample(period).ohlc().ffill(),
+                                      df["size"].resample(period).sum(), ], axis=1)
+                df_ohlcv.columns = ['open', 'high', 'low', 'close', 'volume']
+                df_ohlcv['unixtime'] = df_ohlcv.index.astype(np.int64) / 10 ** 9
+                df_ohlcv['unixtime'] = df_ohlcv.unixtime.astype(np.int64)
+                df_ohlcv = df_ohlcv[['unixtime', 'open', 'high', 'low', 'close', 'volume']]
+
+                # csv出力
+                df_ohlcv.to_csv(csv_path, header=True, index=False)
+                total_count += 1
+                if progress_info:
+                    print(f'Completed output {cur_dt:%Y%m%d}.csv')
+
+                cur_dt += timedelta(days=1)
+                if request_interval > 0:
+                    time.sleep(request_interval)
+
+            print(f'Total output files: {total_count}')
+
+        except Exception as e:
+            print(f'save_daily_ohlcv_from_gmo_trading_gz failed.\n{traceback.format_exc()}')
+            raise e
+
     #---------------------------------------------------------------------------
     # ディレクトリ内の日別OHLCVをまとめて上位時間足にリサンプリングしてcsv出力
     #---------------------------------------------------------------------------
