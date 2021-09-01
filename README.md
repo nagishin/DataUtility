@@ -102,6 +102,7 @@ end_ut   = int(du.Time('2020/09/05 09:00:00', 'JST').unixtime())
 #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
 #                      ファイルがない or 期間を満たしていない場合はrequestで取得
 #                      csvファイル保存 (None or 空文字は保存しない)
+#  progress_info     : 処理途中経過をprint
 # [return]
 #  DataFrame columns=['unixtime', 'side', 'size', 'price']
 #-------------------------------------------------------------------------------
@@ -131,6 +132,7 @@ df_bybit_ohlcv = du.Tool.trade_to_ohlcv(df_bybit_trades, period='1T')
 #                      ファイルがない or 期間を満たしていない場合はrequestで取得
 #                      csvファイル保存 (None or 空文字は保存しない)
 #  request_interval  : 複数request時のsleep時間(sec)
+#  progress_info     : 処理途中経過をprint
 # [return]
 #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
 #-------------------------------------------------------------------------------
@@ -150,6 +152,7 @@ df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, period=1, symb
 #  request_interval  : 複数request時のsleep時間(sec)
 #  ohlcv_kind        : end point指定
 #                      'default':kline, 'mark':mark-price, 'index':index-price, 'premium':premium-index
+#  progress_info     : 処理途中経過をprint
 # [return]
 #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', ('volume')]
 #---------------------------------------------------------------------------
@@ -170,6 +173,7 @@ df_bybit_premium_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1
 #                      ファイルがない or 期間を満たしていない場合はrequestで取得
 #                      csvファイル保存 (None or 空文字は保存しない)
 #  request_interval  : 複数request時のsleep時間(sec)
+#  progress_info     : 処理途中経過をprint
 # [return]
 #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
 #---------------------------------------------------------------------------
@@ -377,6 +381,30 @@ request_interval = 0.0
 progress_info    = True
 
 du.Tool.save_daily_ohlcv_from_bybit_trading_gz(start_ymd, end_ymd, symbol, period, output_dir, request_interval, progress_info)
+
+
+# ---------------------------------------------------------------------------
+# GMO約定履歴を日別にOHLCVにリサンプリングしてcsv出力
+# (https://api.coin.z.com/data/trades/:symbol/ より)
+# ---------------------------------------------------------------------------
+# [params]
+#  start_ymd / end_ymd : str(yyyy/mm/dd)で指定
+#                        取得可能期間 : 2019-10-01以降かつ前日まで
+#  symbol              : 取得対象の通貨ペアシンボル名（デフォルトは BTC_JPY）
+#  period              : リサンプルするタイムフレーム ex) '1S'(秒), '5T'(分), '4H'(時), '1D'(日)
+#  output_dir          : 日別csvを出力するディレクトリパス (Noneは'./gmo/{symbol}/ohlcv/{period}/')
+#  request_interval    : 複数request時のsleep時間(sec)
+#  progress_info       : 処理途中経過をprint
+# ---------------------------------------------------------------------------
+start_ymd        = '2021/08/01'
+end_ymd          = '2021/08/10'
+symbol           = 'BTC_JPY'
+period           = '1S'
+output_dir       = None
+request_interval = 0.0
+progress_info    = True
+
+du.Tool.save_daily_ohlcv_from_gmo_trading_gz(start_ymd, end_ymd, symbol, period, output_dir, request_interval, progress_info)
 
 
 #---------------------------------------------------------------------------

@@ -29,11 +29,12 @@ class Tool(object):
     #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
+    #  progress_info     : 処理途中経過をprint
     # [return]
     #  DataFrame columns=['unixtime', 'side', 'size', 'price']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_trades_from_bybit(cls, start_ut, end_ut, symbol='BTCUSD', csv_path=None):
+    def get_trades_from_bybit(cls, start_ut, end_ut, symbol='BTCUSD', csv_path=None, progress_info:bool=True):
         if csv_path is None:
             csv_path = f'./bybit_{symbol}_trades.csv'
         if ((csv_path is not None) and (len(csv_path) > 0)):
@@ -45,7 +46,8 @@ class Tool(object):
                         if ((start_ut >= ut[0]) & (end_ut <= ut[-1])):
                             df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
                             df.reset_index(drop=True, inplace=True)
-                            print('trades from csv.')
+                            if progress_info:
+                                print('trades from csv.')
                             return df
                 except Exception:
                     pass
@@ -90,7 +92,8 @@ class Tool(object):
 
         df_concat = df_concat[((df_concat['unixtime'] >= start_ut) & (df_concat['unixtime'] < end_ut))]
 
-        print('trades from request.')
+        if progress_info:
+            print('trades from request.')
         return df_concat
 
     #---------------------------------------------------------------------------
@@ -105,11 +108,12 @@ class Tool(object):
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
     #  request_interval  : 複数request時のsleep時間(sec)
+    #  progress_info     : 処理途中経過をprint
     # [return]
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=0.5):
+    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=0.5, progress_info:bool=True):
         df = None
         len_csv = 0
         if csv_path is None:
@@ -123,7 +127,8 @@ class Tool(object):
                     if len_csv > 1:
                         ut = df['unixtime'].values
                         p = ut[1] - ut[0]
-                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        if progress_info:
+                            print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
                         # period判定
                         if p == period * 60:
                             lst_df = []
@@ -163,9 +168,11 @@ class Tool(object):
                 if not os.path.exists(csv_dir):
                     os.makedirs(csv_dir)
                 df.to_csv(csv_path, header=True, index=False)
-                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                if progress_info:
+                    print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
 
-        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        if progress_info:
+            print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
         return df
 
     @classmethod
@@ -221,11 +228,12 @@ class Tool(object):
     #  request_interval  : 複数request時のsleep時間(sec)
     #  ohlcv_kind        : end point指定
     #                      'default':kline, 'mark':mark-price, 'index':index-price, 'premium':premium-index
+    #  progress_info     : 処理途中経過をprint
     # [return]
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', ('volume')]
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', csv_path=None, request_interval=1.0, ohlcv_kind='default'):
+    def get_ohlcv_from_bybit(cls, start_ut, end_ut, period=1, symbol='BTCUSD', csv_path=None, request_interval=1.0, ohlcv_kind='default', progress_info:bool=True):
         df = None
         len_csv = 0
         if csv_path is None:
@@ -239,7 +247,8 @@ class Tool(object):
                     if len_csv > 1:
                         ut = df['unixtime'].values
                         p = ut[1] - ut[0]
-                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        if progress_info:
+                            print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
                         # period判定
                         if p == period * 60:
                             lst_df = []
@@ -279,9 +288,11 @@ class Tool(object):
                 if not os.path.exists(csv_dir):
                     os.makedirs(csv_dir)
                 df.to_csv(csv_path, header=True, index=False)
-                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                if progress_info:
+                    print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
 
-        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        if progress_info:
+            print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
         return df
 
     @classmethod
@@ -355,11 +366,12 @@ class Tool(object):
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
     #                      csvファイル保存 (None or 空文字は保存しない)
     #  request_interval  : 複数request時のsleep時間(sec)
+    #  progress_info     : 処理途中経過をprint
     # [return]
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', csv_path=None, request_interval=0.2):
+    def get_ohlcv_from_coinbase(cls, start_ut, end_ut, period=1, symbol='BTC-USD', csv_path=None, request_interval=0.2, progress_info:bool=True):
         df = None
         len_csv = 0
         if csv_path is None:
@@ -373,7 +385,8 @@ class Tool(object):
                     if len_csv > 1:
                         ut = df['unixtime'].values
                         p = ut[1] - ut[0]
-                        print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        if progress_info:
+                            print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
                         # period判定
                         if p == period * 60:
                             lst_df = []
@@ -413,9 +426,11 @@ class Tool(object):
                 if not os.path.exists(csv_dir):
                     os.makedirs(csv_dir)
                 df.to_csv(csv_path, header=True, index=False)
-                print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                if progress_info:
+                    print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
 
-        print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        if progress_info:
+            print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
         return df
 
     @classmethod
