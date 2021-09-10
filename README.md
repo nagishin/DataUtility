@@ -1,16 +1,150 @@
 # DataUtility
 
 ## インストール
-`pip install git+https://github.com/nagishin/DataUtility.git`
+`pip install -U git+https://github.com/nagishin/DataUtility.git`
 
 ## アンインストール
 `pip uninstall DataUtility`
+
+## GitHub Gist
+[DataUtilityの使い方](https://gist.github.com/nagishin/1677ffa401476e9e98191a04012ac189)
 
 ## 1. Timeクラス
 日付変換・加工をサポートするクラス
  * UnixTime, datetime, 日付文字列のいずれかを設定してTimeオブジェクトを作成します.
  * Timeオブジェクトは必要に応じてタイムゾーン変換や時刻計算・丸めが可能です.
  * TimeオブジェクトからUnixTime, datetime, 日付文字列の形式で時刻を取得できます.
+
+```
+#---------------------------------------------------------------------------
+# Timeオブジェクト生成
+#---------------------------------------------------------------------------
+# [params]
+#  value    : 設定する日付オブジェクト (UnixTime, datetime, str)
+#  tz       : 設定するタイムゾーンをhours(int)または'UTC'/'JST'で設定 (デフォルトはUTC)
+#  str_fmt  : valueがstrの場合に適用する日付フォーマット (省略可)
+#---------------------------------------------------------------------------
+def Time(value: object, tz: object = 0, str_fmt: str = '%Y-%m-%dT%H:%M:%S.%fZ'):
+
+#---------------------------------------------------------------------------
+# 定義済み演算子
+#   Timeオブジェクトで使用できる演算子
+#
+#   ・比較演算子      : ==, !=, <, >, <=, >=
+#   ・対象オブジェクト : Time, datetime, float(unixtime), int(unixtime)
+#
+#   ・加減演算子      : +, -, +=, -=
+#   ・対象オブジェクト : timedelta, relativedelta, float, int
+#---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
+# タイムゾーン変換
+#---------------------------------------------------------------------------
+# [params]
+#  tz       : 変換するタイムゾーンをhours(int)または'UTC'/'JST'で設定 (デフォルトはUTC)
+#---------------------------------------------------------------------------
+def convert_timezone(tz: object = 0) -> self:
+
+#---------------------------------------------------------------------------
+# UnixTime取得
+#---------------------------------------------------------------------------
+# 設定時刻
+def unixtime() -> float:
+
+#---------------------------------------------------------------------------
+# datetime取得
+#---------------------------------------------------------------------------
+# 設定時刻
+def datetime() -> datetime:
+
+# 設定時刻からみた月初日
+def month_first_day() -> datetime:
+
+# 設定時刻からみた月末日
+def month_last_day() -> datetime:
+
+# 設定時刻からみた年初日
+def year_first_day() -> datetime:
+
+# 設定時刻からみた年末日
+def year_last_day() -> datetime:
+
+#---------------------------------------------------------------------------
+# 時刻数値取得
+#---------------------------------------------------------------------------
+# 設定時刻の年,月,日,時,分,秒,マイクロ秒をタプルで取得
+def date() -> (int):
+
+# 設定時刻の年,月,日,時,分,秒,マイクロ秒をそれぞれ取得
+def year() -> int:
+def month() -> int:
+def day() -> int:
+def hour() -> int:
+def minute() -> int:
+def second() -> int:
+def microsecond() -> int:
+
+# 設定時刻の曜日を取得
+def weekday() -> int:
+def weekday_name(self) -> str:
+
+#---------------------------------------------------------------------------
+# 日付文字列取得
+#---------------------------------------------------------------------------
+# [params]
+#  str_fmt  : 取得する日付フォーマット (省略可)
+#---------------------------------------------------------------------------
+def str(str_fmt: str = '%Y-%m-%dT%H:%M:%S.%fZ') -> str:
+
+#---------------------------------------------------------------------------
+# 時刻計算
+#---------------------------------------------------------------------------
+# 加算する年数,月数,日数,時数,分数,秒数,マイクロ秒数をそれぞれ指定して時刻加算
+def add_date(years: int = 0, months: int = 0, days: int = 0, hours: int = 0, minutes: int = 0, seconds: int = 0, microseconds: int = 0) -> self:
+
+# value : 加算する数
+def add_years(value) -> self:
+def add_months(value) -> self:
+def add_days(value) -> self:
+def add_hours(value) -> self:
+def add_minutes(value) -> self:
+def add_seconds(value) -> self:
+def add_microseconds(value) -> self:
+
+# 設定時刻からみた月初日に設定
+def set_month_first_day() -> self:
+
+# 設定時刻からみた月末日に設定
+def set_month_last_day() -> self:
+
+# 設定時刻からみた年初日に設定
+def set_year_first_day() -> self:
+
+# 設定時刻からみた年末日に設定
+def set_year_last_day() -> self:
+
+#---------------------------------------------------------------------------
+# 時刻丸め
+#---------------------------------------------------------------------------
+# [params]
+#  is_down  : True:切り捨て, False:切り上げ
+#---------------------------------------------------------------------------
+# value : 丸め日数(days)
+def round_days(value, is_down=True) -> self:
+
+# value : 丸め時間数(hours)
+def round_hours(value, is_down=True) -> self:
+
+# value : 丸め分数(minutes)
+def round_minutes(value, is_down=True) -> self:
+
+# value : 丸め秒数(seconds)
+def round_seconds(value, is_down=True) -> self:
+```
+
+
+
+
 
 ```
 import time
@@ -609,6 +743,3 @@ chart.plot():
 #---------------------------------------------------------------------------
 chart.save('chart.png')
 ```
-
-## GitHub Gist
-[DataUtilityの使い方](https://gist.github.com/nagishin/1677ffa401476e9e98191a04012ac189)
