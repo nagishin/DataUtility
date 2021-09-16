@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
 from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-#import mpl_finance as mpf
+import matplotlib.style as mplstyle
 import mplfinance.original_flavor as mpf
 from matplotlib import ticker
+from matplotlib.animation import FuncAnimation
 import japanize_matplotlib
 import seaborn as sns
 sns.set(font='IPAexGothic')
@@ -41,9 +44,9 @@ class Chart:
         self.__width = 16
         self.__height = 12
         self.__dpi = 100
-        self.__title = {'title':None, 'loc':'center', 'fontsize':16,}
+        self.__title = {'title': None, 'loc': 'center', 'fontsize': 16, 'obj':None,}
         self.__xaxis = {'col':None, 'grid':True, 'converter':None,}
-        self.__yaxis = {0:{'title':None, 'grid':True, 'legend':False, 'gridspec':1},}
+        self.__yaxis = {0:{'title':None, 'grid':True, 'legend':False, 'gridspec':1, 'autoscale':True},}
         self.__indicators = {0:[],}
         self.__default = {
             'candlestick': {'type':'candlestick', 'open':None, 'high':None, 'low':None, 'close':None, 'upcolor':'#53B987', 'downcolor':'#EB4D5C', 'width':0.8,},
@@ -54,6 +57,10 @@ class Chart:
         }
         self.__backcolor = ['#FAFAFA', '#F5F5F5',]
         self.__fig = None
+        self.__axes = {}
+        self.__ani = None
+        self.__auto_scroll_range = 0
+        self.__animation_obj = {'x_text': None, 'f_text': None, 'x_vlines': []}
 
     #---------------------------------------------------------------------------
     # タイトル設定
@@ -125,21 +132,29 @@ class Chart:
     #  grid     : Y軸グリッド表示ON/OFF
     #  legend   : 凡例表示ON/OFF
     #  gridspec : 複数チャート時の高さ配分
+    #  autoscale: 自動スケールON/OFF
     #
     # [複数チャートの高さ調整]
     # 各チャートのgridspec値の合計から各チャートの高さ比率が設定される
     #  ex) [ax0]gridspec=2, [ax1]gridspec=1, [ax2]gridspec=1の場合
     #      ax0 : ax1 : ax2の高さは 2:1:1 となる
     #---------------------------------------------------------------------------
-    def set_y(self, ax: int=0, title: str=None, grid: bool=True, legend: bool=False, gridspec: int=1):
+    def set_y(self, ax: int=0, title: str=None, grid: bool=True, legend: bool=False, gridspec: int=1, autoscale: bool=True):
         if Chart.is_int(ax) and ax >= 0:
             if ax in self.__yaxis.keys():
                 self.__yaxis[ax]['title'] = title
                 self.__yaxis[ax]['grid'] = grid
                 self.__yaxis[ax]['legend'] = legend
                 self.__yaxis[ax]['gridspec'] = gridspec
+                self.__yaxis[ax]['autoscale'] = autoscale
             else:
-                self.__yaxis[ax] = {'title':title, 'grid':grid, 'legend':legend, 'gridspec':gridspec}
+                self.__yaxis[ax] = {
+                    'title': title,
+                    'grid': grid,
+                    'legend': legend,
+                    'gridspec': gridspec,
+                    'autoscale': autoscale,
+                }
         return self
 
     #---------------------------------------------------------------------------
@@ -444,12 +459,50 @@ class Chart:
         plt.rcdefaults()
 
     #---------------------------------------------------------------------------
+    # アニメーションチャート作成
+    # [params]
+    #  filepath          : 保存するファイルパス(.gif/.html)
+    #  step              : アニメーションで表示していくindex数
+    #  interval          : 表示更新間隔[ms]
+    #  auto_scroll_range : 自動スクロールするindex幅 (default:0->全体表示)
+    #---------------------------------------------------------------------------
+    def save_animation(self, filepath: str, step: int=1, interval: int=100, auto_scroll_range: int=0):
+        split = os.path.splitext(filepath)
+        if len(split) < 2:
+            return
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext not in ['.gif', '.html']:
+            return
+
+        if self.__ani == None:
+            self.__create_animation(step, interval, auto_scroll_range)
+
+        # gifファイル出力
+        if ext == '.gif':
+            writer = 'pillow'  # 'pillow'/'imagemagick'
+            self.__ani.save(filepath, writer=writer)
+
+        # htmlファイル出力
+        elif ext == '.html':
+            html_video = self.__ani.to_html5_video()
+            html_string = f'<html><head></head><body>{html_video}</body></html>'
+            with open(filepath, 'w') as f:
+                f.write(html_string)
+
+        plt.close()
+        # plot設定初期化
+        plt.rcdefaults()
+
+
+    #---------------------------------------------------------------------------
     # チャート作成
     #---------------------------------------------------------------------------
     def __create(self):
         # マージン設定
         matplotlib.rcParams['axes.xmargin'] = 0.001 # X軸
         matplotlib.rcParams['axes.ymargin'] = 0.05  # Y軸
+        # 高速スタイル設定
+        mplstyle.use('fast')
         # グラフ設定
         self.__fig = plt.figure(figsize=(self.__width, self.__height), dpi=self.__dpi)
         self.__fig.autofmt_xdate()
@@ -464,6 +517,8 @@ class Chart:
         # X軸列設定
         lst_x = range(len(self.__df.index))
 
+        self.__animation_obj = {'x_text': None, 'f_text': None, 'x_vlines': []}
+        self.__axes = {}
         ax_idx = 0
         grid = 0
         ax0 = None
@@ -473,10 +528,28 @@ class Chart:
                 ax = plt.subplot(gs[grid:grid+g, 0])
                 ax0 = ax # X軸同期のため
                 # タイトル
-                ax.set_title(self.__title['title'], loc=self.__title['loc'], fontsize=self.__title['fontsize'])
+                self.__title['obj'] = ax.set_title(self.__title['title'], loc=self.__title['loc'], fontsize=self.__title['fontsize'])
+
+                # アニメーション用フレームtext (default alpha=0)
+                self.__animation_obj['f_text'] = ax.text(1, 1, 'text',
+                                                         color='black',
+                                                         #backgroundcolor='#2f4f4f',
+                                                         alpha=0.0,
+                                                         fontsize=11,
+                                                         fontweight='medium',
+                                                         fontstretch='normal',
+                                                         #fontfamily='Impact',
+                                                         horizontalalignment='right',
+                                                         verticalalignment='bottom',
+                                                         transform=ax.transAxes,
+                                                         #style='italic',
+                                                         )
             else:
                 # axis作成
                 ax = plt.subplot(gs[grid:grid+g, 0], sharex=ax0) # 最上段チャートにX軸同期
+
+            # ax登録
+            self.__axes[k] = ax
 
             # 最下段チャートはX軸目盛り設定
             if grid + g == total_grid:
@@ -494,9 +567,30 @@ class Chart:
                     except IndexError:
                         return ''
                 ax.xaxis.set_major_formatter(ticker.FuncFormatter(mydate))
+
+                # アニメーション用X軸text (default alpha=0)
+                self.__animation_obj['x_text'] = ax.text(0, 0, 'text',
+                                                         color='black',
+                                                         #backgroundcolor='#2f4f4f',
+                                                         alpha=0.0,
+                                                         fontsize=12,
+                                                         fontweight='medium',
+                                                         fontstretch='normal',
+                                                         #fontfamily='Impact',
+                                                         horizontalalignment='center',
+                                                         verticalalignment='top',
+                                                         #transform=ax.transAxes,
+                                                         #style='italic',
+                                                         )
+
             else:
                 # x軸目盛り非表示
                 ax.tick_params(labelbottom=False, bottom=False)
+
+            # アニメーション用X軸vline (default alpha=0)
+            self.__animation_obj['x_vlines'].append(
+                ax.axvline(x=0, color='dimgray', alpha=0.0, linestyle='--', linewidth=0.7)
+            )
 
             # 枠線設定
             axis=['top','bottom','left','right']
@@ -522,7 +616,7 @@ class Chart:
             for indi in self.__indicators[k]:
                 # candlestick
                 if indi['type'] == 'candlestick':
-                    mpf.candlestick2_ohlc(ax,
+                    lines, patches = mpf.candlestick2_ohlc(ax,
                                           opens=self.__df[indi['open']].values,
                                           highs=self.__df[indi['high']].values,
                                           lows=self.__df[indi['low']].values,
@@ -530,22 +624,74 @@ class Chart:
                                           width=indi['width'],
                                           colorup=indi['upcolor'],
                                           colordown=indi['downcolor'])
+                    # アニメーション用plotデータ
+                    indi['plot_data'] = {
+                        'range': { # spikes
+                            'obj': lines,
+                            'segments': lines.get_segments(),
+                            'colors': lines.get_colors(),
+                        },
+                        'bar': { # bodies
+                            'obj': patches,
+                            'verts': [p.vertices for p in patches.get_paths()],
+                            'edge_colors': patches.get_edgecolors(),
+                            'face_colors': patches.get_facecolors(),
+                        },
+                    }
+
                 # line
                 elif indi['type'] == 'line':
-                    ax.plot(lst_x, self.__df[indi['y']], color=indi['color'], linewidth=indi['linewidth'], linestyle=indi['linestyle'], label=indi['label'])
+                    lines = ax.plot(lst_x, self.__df[indi['y']], color=indi['color'], linewidth=indi['linewidth'], linestyle=indi['linestyle'], label=indi['label'])
+                    # アニメーション用plotデータ
+                    line = lines[0]  # lines: Line2D collection
+                    data = line.get_data()
+                    indi['plot_data'] = {
+                        'obj': line,
+                        'x': data[0],
+                        'y': data[1],
+                    }
+
                 # bar
                 elif indi['type'] == 'bar':
-                    ax.bar(lst_x, self.__df[indi['y']], color=indi['color'], width=indi['width'], label=indi['label'])
+                    bars = ax.bar(lst_x, self.__df[indi['y']], color=indi['color'], width=indi['width'], label=indi['label'])
+                    # アニメーション用plotデータ
+                    indi['plot_data'] = {
+                        'obj': bars, # Rectangle collection
+                        'heights': [b.get_height() for b in bars],
+                    }
+
                 # mark
                 elif indi['type'] == 'mark':
-                    ax.scatter(lst_x, self.__df[indi['y']], marker=indi['marker'], s=indi['size'], c=indi['color'])
+                    marks = ax.scatter(lst_x, self.__df[indi['y']], marker=indi['marker'], s=indi['size'], c=indi['color'])
+                    # アニメーション用plotデータ
+                    indi['plot_data'] = {
+                        'obj': marks, # Path collection
+                        'x': np.array(lst_x),
+                        'y': self.__df[indi['y']].values,
+                    }
+
                 # band
                 elif indi['type'] == 'band':
-                    ax.fill_between(lst_x, self.__df[indi['y1']], self.__df[indi['y2']], where=self.__df[indi['y1']] >= self.__df[indi['y2']],
-                             facecolor=indi['upcolor'], alpha=indi['alpha'], interpolate=True)
-                    ax.fill_between(lst_x, self.__df[indi['y1']], self.__df[indi['y2']], where=self.__df[indi['y1']] <= self.__df[indi['y2']],
-                             facecolor=indi['downcolor'], alpha=indi['alpha'], interpolate=True)
-                    ax.plot(lst_x, self.__df[indi['y1']], lst_x, self.__df[indi['y2']], color=indi['linecolor'], linewidth=indi['linewidth'], label=indi['label'])
+                    fill1 = ax.fill_between(lst_x, self.__df[indi['y1']], self.__df[indi['y2']], where=self.__df[indi['y1']] >= self.__df[indi['y2']],
+                            facecolor=indi['upcolor'], alpha=indi['alpha'], interpolate=True, zorder=0)
+                    fill2 = ax.fill_between(lst_x, self.__df[indi['y1']], self.__df[indi['y2']], where=self.__df[indi['y1']] <= self.__df[indi['y2']],
+                            facecolor=indi['downcolor'], alpha=indi['alpha'], interpolate=True, zorder=0)
+                    lines = ax.plot(lst_x, self.__df[indi['y1']], lst_x, self.__df[indi['y2']], color=indi['linecolor'], linewidth=indi['linewidth'], label=indi['label'])
+                    # アニメーション用plotデータ
+                    indi['plot_data'] = {
+                        'obj': {
+                            'line1': lines[0],
+                            'line2': lines[1],
+                            'fill1': fill1,  # PolyCollection
+                            'fill2': fill2,  # PolyCollection
+                        },
+                        'x': np.array(lst_x),
+                        'y1': self.__df[indi['y1']].values,
+                        'y2': self.__df[indi['y2']].values,
+                        'verts1': [p.vertices.copy() for p in fill1.get_paths()],
+                        'verts2': [p.vertices.copy() for p in fill2.get_paths()],
+                    }
+
                 # ラベル設定チェック
                 if indi['type'] != 'candlestick' and indi['label'] != None and len(indi['label']) > 0:
                     has_label = True
@@ -563,6 +709,245 @@ class Chart:
 
             grid += g
             ax_idx += 1
+
+    #---------------------------------------------------------------------------
+    # アニメーション作成
+    #---------------------------------------------------------------------------
+    def __create_animation(self, step, interval, auto_scroll_range):
+        if self.__fig == None:
+            self.__create()
+
+        rows = len(self.__df.index) + 1
+        self.__auto_scroll_range = auto_scroll_range
+        self.__ani = FuncAnimation(fig=self.__fig, func=self.__update_animation, frames=range(0, rows, step),
+                                   init_func=self.__init_animation, interval=interval, repeat=False, blit=True)
+
+    #---------------------------------------------------------------------------
+    # アニメーション初期処理
+    #---------------------------------------------------------------------------
+    def __init_animation(self):
+        return self.__fig,
+
+    #---------------------------------------------------------------------------
+    # アニメーション更新処理
+    #---------------------------------------------------------------------------
+    def __update_animation(self, frame):
+        if not self.__indicators:
+            return
+
+        # x: アニメーションindex描画範囲
+        from_idx = 0
+        to_idx = max(min(frame, len(self.__df.index)), from_idx)
+
+        # x軸範囲設定
+        if self.__auto_scroll_range > 0:
+            lim_max_x = to_idx
+            lim_min_x = max(to_idx - self.__auto_scroll_range, 0)
+            lim_max_x = max(lim_min_x + self.__auto_scroll_range, lim_max_x)
+            self.__axes[0].set_xlim(lim_min_x, lim_max_x)
+        else:
+            lim_min_x = 0
+            lim_max_x = len(self.__df.index)
+
+        # y軸最大範囲計算dict
+        y_limit = {k: [sys.float_info.max, -sys.float_info.max] for k in self.__axes.keys()}
+
+        # 各インジケータ更新
+        for k, indies in self.__indicators.items():
+            for indi in indies:
+                if 'plot_data' not in indi.keys():
+                    continue
+                dic_data = indi['plot_data']
+
+                # candlestick
+                if indi['type'] == 'candlestick':
+                    if 'range' not in dic_data.keys() or 'bar' not in dic_data.keys():
+                        continue
+                    dic_lines = dic_data['range']
+                    dic_patches = dic_data['bar']
+                    if 'obj' not in dic_lines.keys() or 'obj' not in dic_patches.keys():
+                        continue
+                    # spikes
+                    lines = dic_lines['obj']
+                    lines.set_segments(dic_lines['segments'][from_idx:to_idx])
+                    lines.set_colors(dic_lines['colors'][from_idx:to_idx])
+                    lines.set_linewidth(2.0)
+                    # bodies
+                    patches = dic_patches['obj']
+                    patches.set_verts(dic_patches['verts'][from_idx:to_idx])
+                    patches.set_edgecolors(dic_patches['edge_colors'][from_idx:to_idx])
+                    patches.set_facecolors(dic_patches['face_colors'][from_idx:to_idx])
+                    # y軸範囲更新
+                    if self.__yaxis[k]['autoscale']:
+                        l = min(self.__df[indi['low']].values[lim_min_x:lim_max_x])
+                        h = max(self.__df[indi['high']].values[lim_min_x:lim_max_x])
+                    else:
+                        l = min(self.__df[indi['low']].values)
+                        h = max(self.__df[indi['high']].values)
+                    y_limit[k][0] = min(y_limit[k][0], l)
+                    y_limit[k][1] = max(y_limit[k][1], h)
+
+                # line
+                elif indi['type'] == 'line':
+                    if 'obj' not in dic_data.keys():
+                        continue
+                    line = dic_data['obj']
+                    line.set_data(dic_data['x'][from_idx:to_idx], dic_data['y'][from_idx:to_idx])
+                    # y軸範囲更新
+                    if self.__yaxis[k]['autoscale']:
+                        l = min(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                        h = max(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                    else:
+                        l = min(self.__df[indi['y']].values)
+                        h = max(self.__df[indi['y']].values)
+                    y_limit[k][0] = min(y_limit[k][0], l)
+                    y_limit[k][1] = max(y_limit[k][1], h)
+
+                # bar
+                elif indi['type'] == 'bar':
+                    if 'obj' not in dic_data.keys():
+                        continue
+                    bars = dic_data['obj']
+                    heights = dic_data['heights']
+                    [bar.set_height(heights[i] if ((i >= from_idx) & (i < to_idx)) else 0.0) for i, bar in enumerate(bars)]
+                    # y軸範囲更新
+                    if self.__yaxis[k]['autoscale']:
+                        l = min(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                        h = max(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                    else:
+                        l = min(self.__df[indi['y']].values)
+                        h = max(self.__df[indi['y']].values)
+                    y_limit[k][0] = min(y_limit[k][0], l)
+                    y_limit[k][1] = max(y_limit[k][1], h)
+
+                # mark
+                elif indi['type'] == 'mark':
+                    if 'obj' not in dic_data.keys():
+                        continue
+                    marks = dic_data['obj']
+                    x = dic_data['x']
+                    y = dic_data['y']
+                    data = np.hstack((x[:to_idx, np.newaxis], y[:to_idx, np.newaxis]))
+                    marks.set_offsets(data)
+                    # y軸範囲更新
+                    if self.__yaxis[k]['autoscale']:
+                        l = min(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                        h = max(self.__df[indi['y']].values[lim_min_x:lim_max_x])
+                    else:
+                        l = min(self.__df[indi['y']].values)
+                        h = max(self.__df[indi['y']].values)
+                    y_limit[k][0] = min(y_limit[k][0], l)
+                    y_limit[k][1] = max(y_limit[k][1], h)
+
+                # band
+                elif indi['type'] == 'band':
+                    if 'obj' not in dic_data.keys():
+                        continue
+                    line1 = dic_data['obj']['line1']
+                    line2 = dic_data['obj']['line2']
+                    fill1 = dic_data['obj']['fill1']
+                    fill2 = dic_data['obj']['fill2']
+                    x = dic_data['x']
+                    y1 = dic_data['y1']
+                    y2 = dic_data['y2']
+                    verts1 = dic_data['verts1']
+                    verts2 = dic_data['verts2']
+                    # lines
+                    line1.set_data(x[from_idx:to_idx], y1[from_idx:to_idx])
+                    line2.set_data(x[from_idx:to_idx], y2[from_idx:to_idx])
+                    # fill1
+                    for i, path in enumerate(fill1.get_paths()):
+                        verts = verts1[i]
+                        min_x = min(verts[:, 0])
+                        max_x = max(verts[:, 0])
+                        if from_idx <= min_x and max_x <= to_idx - 1:
+                            if np.all(path.vertices == verts):
+                                continue
+                        df = pd.DataFrame(verts.copy(), columns=['x', 'y'])
+                        df.loc[df['x'] < from_idx, 'x'] = from_idx
+                        df.loc[df['x'] > to_idx - 1, 'x'] = to_idx - 1
+                        path.vertices = df.values
+                    # fill2
+                    for i, path in enumerate(fill2.get_paths()):
+                        verts = verts2[i]
+                        min_x = min(verts[:, 0])
+                        max_x = max(verts[:, 0])
+                        if from_idx <= min_x and max_x <= to_idx - 1:
+                            if np.all(path.vertices == verts):
+                                continue
+                        df = pd.DataFrame(verts.copy(), columns=['x', 'y'])
+                        df.loc[df['x'] < from_idx, 'x'] = from_idx
+                        df.loc[df['x'] > to_idx - 1, 'x'] = to_idx - 1
+                        path.vertices = df.values
+                    # y軸範囲更新
+                    if self.__yaxis[k]['autoscale']:
+                        l1 = min(self.__df[indi['y1']].values[lim_min_x:lim_max_x])
+                        h1 = max(self.__df[indi['y1']].values[lim_min_x:lim_max_x])
+                        l2 = min(self.__df[indi['y2']].values[lim_min_x:lim_max_x])
+                        h2 = max(self.__df[indi['y2']].values[lim_min_x:lim_max_x])
+                    else:
+                        l1 = min(self.__df[indi['y1']].values)
+                        h1 = max(self.__df[indi['y1']].values)
+                        l2 = min(self.__df[indi['y2']].values)
+                        h2 = max(self.__df[indi['y2']].values)
+                    y_limit[k][0] = min(y_limit[k][0], l1)
+                    y_limit[k][1] = max(y_limit[k][1], h1)
+                    y_limit[k][0] = min(y_limit[k][0], l2)
+                    y_limit[k][1] = max(y_limit[k][1], h2)
+
+        # y軸範囲設定
+        footer_lim_y = []
+        for k, lim in y_limit.items():
+            if lim[0] < lim[1] and lim[0] < sys.float_info.max and lim[1] > -sys.float_info.max:
+                range_y = lim[1] - lim[0]
+                margin_y = range_y * 0.05
+                lim_min_y = lim[0] - margin_y
+                lim_max_y = lim[1] + margin_y
+                self.__axes[k].set_ylim(lim_min_y, lim_max_y)
+                if k == max(self.__axes.keys()):
+                    footer_lim_y.append(lim_min_y)
+                    footer_lim_y.append(lim_max_y)
+
+        # x軸 vline設定
+        cur_x = max(to_idx - 1, 0)
+        for v in self.__animation_obj['x_vlines']:
+            v.set_xdata(cur_x)
+            v.set_alpha(1.0)
+
+        # x軸 text設定
+        cur_text = self.__animation_obj['x_text']
+        # 透過率/枠設定
+        cur_text.set_alpha(1.0)
+        cur_text.set_bbox({
+            'facecolor': 'white',
+            'edgecolor': 'black',
+            #'boxstyle': 'Round',
+            'linewidth': 0.7,
+            'alpha': 1.0,
+            'pad': 2,
+        })
+        # ラベル設定
+        xcol = self.__df[self.__xaxis['col']].values if self.__xaxis['col'] in self.__df.columns else self.__df.index.values
+        text_x = str(xcol[cur_x]) if self.__xaxis['converter'] == None else str(self.__xaxis['converter'](xcol[int(cur_x)]))
+        cur_text.set_text(text_x)
+        # 位置設定
+        if len(footer_lim_y) > 1:
+            cur_text.set_position((cur_x, footer_lim_y[0]))
+        else:
+            cur_text.set_x(cur_x)
+
+        # Frame text設定
+        cur_text = self.__animation_obj['f_text']
+        # 透過率/枠設定
+        cur_text.set_alpha(1.0)
+        # ラベル設定
+        cur_text.set_text(f'Index: {lim_min_x}-{to_idx} / {len(self.__df.index)}')
+
+        # タイトル設定
+        #self.__title['obj'].set_text(f'{self.__title["title"]}  Frame: {frame}  Draw index:{lim_min_x} - {lim_max_x}')
+
+        return self.__fig,
+
 
     #---------------------------------------------------------------------------
     # 日付変換関数(クラスメソッド)
