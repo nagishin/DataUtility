@@ -7,7 +7,7 @@
 `pip uninstall DataUtility`
 
 ## GitHub Gist
-[DataUtilityの使い方](https://gist.github.com/nagishin/1677ffa401476e9e98191a04012ac189)
+[DataUtilityの使い方](https://nbviewer.jupyter.org/gist/nagishin/1677ffa401476e9e98191a04012ac189)
 
 ## 1. Timeクラス
 日付変換・加工をサポートするクラス
