@@ -502,7 +502,7 @@ class Chart:
         # 言語設定
         sns.set(font='IPAexGothic')
         # マージン設定
-        matplotlib.rcParams['axes.xmargin'] = 0.001 # X軸
+        matplotlib.rcParams['axes.xmargin'] = 0.003 # X軸
         matplotlib.rcParams['axes.ymargin'] = 0.05  # Y軸
         # 高速スタイル設定
         mplstyle.use('fast')
