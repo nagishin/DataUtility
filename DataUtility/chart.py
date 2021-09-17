@@ -713,6 +713,19 @@ class Chart:
             grid += g
             ax_idx += 1
 
+        # アニメーションオブジェクト位置調整
+        max_ax = self.__axes[max(self.__axes.keys())]
+        left, right = max_ax.get_xlim()
+        bottom, top = max_ax.get_ylim()
+
+        # x軸 vline
+        for v in self.__animation_obj['x_vlines']:
+            v.set_xdata(left)
+
+        # x軸 text
+        x_text = self.__animation_obj['x_text']
+        x_text.set_position((left, bottom))
+
     #---------------------------------------------------------------------------
     # アニメーション作成
     #---------------------------------------------------------------------------
@@ -899,7 +912,6 @@ class Chart:
                     y_limit[k][1] = max(y_limit[k][1], h2)
 
         # y軸範囲設定
-        footer_lim_y = []
         for k, lim in y_limit.items():
             if lim[0] < lim[1] and lim[0] < sys.float_info.max and lim[1] > -sys.float_info.max:
                 range_y = lim[1] - lim[0]
@@ -907,9 +919,6 @@ class Chart:
                 lim_min_y = lim[0] - margin_y
                 lim_max_y = lim[1] + margin_y
                 self.__axes[k].set_ylim(lim_min_y, lim_max_y)
-                if k == max(self.__axes.keys()):
-                    footer_lim_y.append(lim_min_y)
-                    footer_lim_y.append(lim_max_y)
 
         # x軸 vline設定
         cur_x = max(to_idx - 1, 0)
@@ -934,10 +943,9 @@ class Chart:
         text_x = str(xcol[cur_x]) if self.__xaxis['converter'] == None else str(self.__xaxis['converter'](xcol[int(cur_x)]))
         cur_text.set_text(text_x)
         # 位置設定
-        if len(footer_lim_y) > 1:
-            cur_text.set_position((cur_x, footer_lim_y[0]))
-        else:
-            cur_text.set_x(cur_x)
+        max_ax = self.__axes[max(self.__axes.keys())]
+        bottom, top = max_ax.get_ylim()
+        cur_text.set_position((cur_x, bottom))
 
         # Frame text設定
         cur_text = self.__animation_obj['f_text']
