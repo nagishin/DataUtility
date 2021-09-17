@@ -13,7 +13,6 @@ from matplotlib import ticker
 from matplotlib.animation import FuncAnimation
 import japanize_matplotlib
 import seaborn as sns
-sns.set(font='IPAexGothic')
 
 #---------------------------------------------------------------------------
 # Chart作成クラス
@@ -452,8 +451,10 @@ class Chart:
     def save(self, filepath: str):
         if self.__fig == None:
             self.__create()
+
         # pngファイル出力
         plt.savefig(filepath, dpi=self.__dpi, bbox_inches='tight', pad_inches=0.2, transparent=False)
+
         plt.close()
         # plot設定初期化
         plt.rcdefaults()
@@ -498,6 +499,8 @@ class Chart:
     # チャート作成
     #---------------------------------------------------------------------------
     def __create(self):
+        # 言語設定
+        sns.set(font='IPAexGothic')
         # マージン設定
         matplotlib.rcParams['axes.xmargin'] = 0.001 # X軸
         matplotlib.rcParams['axes.ymargin'] = 0.05  # Y軸
@@ -770,7 +773,7 @@ class Chart:
                     # spikes
                     lines = dic_lines['obj']
                     lines.set_segments(dic_lines['segments'][from_idx:to_idx])
-                    lines.set_colors(dic_lines['colors'][from_idx:to_idx])
+                    lines.set_color(dic_lines['colors'][from_idx:to_idx])
                     lines.set_linewidth(2.0)
                     # bodies
                     patches = dic_patches['obj']
