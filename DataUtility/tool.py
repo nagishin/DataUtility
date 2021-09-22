@@ -63,7 +63,7 @@ class Tool(object):
                 df = pd.read_csv(f'https://public.bybit.com/trading/{symbol}/{symbol}{cur_dt:%Y-%m-%d}.csv.gz',
                                  compression='gzip',
                                  usecols=['timestamp', 'side', 'price', 'size'],
-                                 dtype={'timestamp':'float', 'side':'str', 'price':'float', 'size':'int'})
+                                 dtype={'timestamp':'float', 'side':'str', 'price':'float'})
             except Exception:
                 cur_dt += timedelta(days=1)
                 continue
@@ -1853,7 +1853,7 @@ class Tool(object):
                     df = pd.read_csv(f'https://public.bybit.com/trading/{symbol}/{symbol}{cur_dt:%Y-%m-%d}.csv.gz',
                                      compression='gzip',
                                      usecols=['timestamp', 'side', 'price', 'size'],
-                                     dtype={'timestamp':'float', 'side':'str', 'price':'float', 'size':'int'})
+                                     dtype={'timestamp':'float', 'side':'str', 'price':'float'})
                 except Exception:
                     print('read_csv error', traceback.format_exc())
                     df = None
@@ -2129,7 +2129,7 @@ class Tool(object):
             df_ohlcv.reset_index(drop=True, inplace=True)
 
             return df_ohlcv
-    
+
         except Exception as e:
             print(f'get_ohlcv_from_daily_csv failed.\n{traceback.format_exc()}')
             raise e
