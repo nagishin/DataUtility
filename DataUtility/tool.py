@@ -96,6 +96,23 @@ class Tool(object):
             print('trades from request.')
         return df_concat
 
+    # 分指定periodを分(int)に変換
+    @classmethod
+    def __convert_period_to_min(cls, period):
+        if cls.is_numeric(period):
+            return int(float(period))
+        minutes = 0
+        if isinstance(period, str):
+            tf = period[-1].upper()
+            val = int(float(period[:-1])) if cls.is_numeric(period[:-1]) else 0
+            if tf == 'S':
+                minutes = int(val / 60)
+            elif tf == 'H':
+                minutes = val * 60
+            elif tf == 'D':
+                minutes = val * 60 * 24
+        return minutes
+
     #---------------------------------------------------------------------------
     # BitMEX OHLCVを取得
     # (取得件数:1440/requestとなるため, 大量取得時はRateLimit注意)
@@ -114,6 +131,8 @@ class Tool(object):
     #---------------------------------------------------------------------------
     @classmethod
     def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=0.5, progress_info:bool=True):
+        # periodを分(int)に変換
+        period = cls.__convert_period_to_min(period)
         df = None
         len_csv = 0
         if csv_path is None:
@@ -220,7 +239,7 @@ class Tool(object):
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
-    #  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D' 'M' 'W')
+    #  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D')
     #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTCUSD)
     #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
     #                      ファイルがない or 期間を満たしていない場合はrequestで取得
@@ -250,7 +269,10 @@ class Tool(object):
                         if progress_info:
                             print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
                         # period判定
-                        if p == period * 60:
+                        period_min = period
+                        if period == 'D':
+                            period_min = 60 * 24
+                        if p == period_min * 60:
                             lst_df = []
                             # csv先頭よりも開始日が過去の場合は不足分を取得
                             if start_ut < ut[0]:
@@ -310,9 +332,13 @@ class Tool(object):
             'limit':200,
         }
 
+        period_min = period
+        if period == 'D':
+            period_min = 60 * 24
+
         lst_ohlcv = []
         cur_time = start_ut
-        add_time = int(period) * 60 * 200
+        add_time = int(period_min) * 60 * 200
         retry_count = 0
         while cur_time < end_ut:
             try:
@@ -2133,3 +2159,35 @@ class Tool(object):
         except Exception as e:
             print(f'get_ohlcv_from_daily_csv failed.\n{traceback.format_exc()}')
             raise e
+
+    @classmethod
+    def is_int(cls, val) -> bool:
+        """**【intチェック】**
+        :param val: チェックする値
+        :return: True(int) / False(not int)
+        """
+        try:
+            int(val)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def is_float(cls, val) -> bool:
+        """**【floatチェック】**
+        :param val: チェックする値
+        :return: True(float) / False(not float)
+        """
+        try:
+            float(val)
+            return True
+        except ValueError:
+            return False
+
+    @classmethod
+    def is_numeric(cls, val) -> bool:
+        """**【数値チェック】**
+        :param val: チェックする値
+        :return: True(数値) / False(数値ではない)
+        """
+        return cls.is_int(val) or cls.is_float(val)

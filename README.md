@@ -212,7 +212,7 @@ df_bitmex_ohlcv = du.Tool.get_ohlcv_from_bitmex(start_ut, end_ut, period=1, symb
 #---------------------------------------------------------------------------
 # [params]
 #  start_ut / end_ut : UnixTimeで指定
-#  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D' 'M' 'W')
+#  period            : 期間指定 (1 3 5 15 30 60 120 240 360 720 'D')
 #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTCUSD)
 #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
 #                      ファイルがない or 期間を満たしていない場合はrequestで取得
