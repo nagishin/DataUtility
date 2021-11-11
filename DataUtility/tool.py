@@ -98,7 +98,7 @@ class Tool(object):
 
     #---------------------------------------------------------------------------
     # BitMEX OHLCVを取得
-    # (取得件数:1万/requestとなるため, 大量取得時はRateLimit注意)
+    # (取得件数:1440/requestとなるため, 大量取得時はRateLimit注意)
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
@@ -185,7 +185,7 @@ class Tool(object):
 
         t=[]; o=[]; h=[]; l=[]; c=[]; v=[]
         cur_time = start_ut
-        add_time = period * 60 * 10000
+        add_time = period * 60 * 1440
         retry_count = 0
         while cur_time < end_ut:
             try:

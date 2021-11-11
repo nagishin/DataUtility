@@ -190,6 +190,7 @@ df_bybit_ohlcv = du.Tool.trade_to_ohlcv(df_bybit_trades, period='1T')
 
 #-------------------------------------------------------------------------------
 # BitMEX OHLCVを取得
+# (取得件数:1440/requestとなるため, 大量取得時はRateLimit注意)
 #-------------------------------------------------------------------------------
 # [params]
 #  start_ut / end_ut : UnixTimeで指定
