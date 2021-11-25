@@ -247,6 +247,23 @@ df_bybit_premium_ohlcv = du.Tool.get_ohlcv_from_bybit(start_ut, end_ut, period=1
 #---------------------------------------------------------------------------
 df_coinbase_ohlcv = du.Tool.get_ohlcv_from_coinbase(start_ut, end_ut, period=1, symbol='BTC-USD', request_interval=0.5)
 
+#---------------------------------------------------------------------------
+# FTX OHLCVを取得
+#---------------------------------------------------------------------------
+# [params]
+#  start_ut / end_ut : UnixTimeで指定
+#  period            : 分を指定 (0.25(=15sec) or 1 or 5 or 15 or 60 or 240 or 1440)
+#  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTC-PERP)
+#  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+#                      ファイルがない or 期間を満たしていない場合はrequestで取得
+#                      csvファイル保存 (None or 空文字は保存しない)
+#  request_interval  : 複数request時のsleep時間(sec)
+#  progress_info     : 処理途中経過をprint
+# [return]
+#  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+#---------------------------------------------------------------------------
+df_ftx_ohlcv = du.Tool.get_ohlcv_from_ftx(start_ut, end_ut, period=1, symbol='BTC-PERP', request_interval=0.5)
+
 #-------------------------------------------------------------------------------
 # OHLCVを上位時間足にリサンプリング
 #-------------------------------------------------------------------------------

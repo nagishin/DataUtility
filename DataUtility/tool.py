@@ -503,6 +503,137 @@ class Tool(object):
         return df
 
     #---------------------------------------------------------------------------
+    # FTX OHLCVを取得
+    #---------------------------------------------------------------------------
+    # [params]
+    #  start_ut / end_ut : UnixTimeで指定
+    #  period            : 分を指定 (0.25(=15sec) or 1 or 5 or 15 or 60 or 240 or 1440)
+    #  symbol            : 取得対象の通貨ペアシンボル名 (デフォルトはBTC-PERP)
+    #  csv_path          : 該当ファイルがあれば読み込んで対象期間をチェック
+    #                      ファイルがない or 期間を満たしていない場合はrequestで取得
+    #                      csvファイル保存 (None or 空文字は保存しない)
+    #  request_interval  : 複数request時のsleep時間(sec)
+    #  progress_info     : 処理途中経過をprint
+    # [return]
+    #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
+    #---------------------------------------------------------------------------
+    @classmethod
+    def get_ohlcv_from_ftx(cls, start_ut, end_ut, period=1, symbol='BTC-PERP', csv_path=None, request_interval=0.5, progress_info: bool = True):
+        period_sec = int(period * 60)
+        df = None
+        len_csv = 0
+        if csv_path is None:
+            csv_path = f'./ftx_{symbol}_ohlcv_{period_sec}sec.csv'
+        if ((csv_path is not None) and (len(csv_path) > 0)):
+            if os.path.isfile(csv_path):
+                try:
+                    # csv読み込み
+                    df = pd.read_csv(csv_path)
+                    len_csv = len(df.index)
+                    if len_csv > 1:
+                        ut = df['unixtime'].values
+                        p = ut[1] - ut[0]
+                        if progress_info:
+                            print(f'read csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+                        # period判定
+                        if p == period_sec:
+                            lst_df = []
+                            # csv先頭よりも開始日が過去の場合は不足分を取得
+                            if start_ut < ut[0]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_ftx(start_ut, ut[0], period_sec, symbol, request_interval)
+                                )
+                            lst_df.append(df)
+                            # csv末尾よりも終了日が未来の場合は不足分を取得
+                            if end_ut > ut[-1]:
+                                lst_df.append(
+                                    cls.__request_ohlcv_from_ftx(ut[-1], end_ut, period_sec, symbol, request_interval)
+                                )
+                            # DataFrame結合＆unixtimeソート
+                            df = cls.concat_df(lst_df, sort_column='unixtime')
+                            # 重複行削除
+                            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+                            # 指定範囲フィルタリング
+                            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+                            # indexリセット
+                            df.reset_index(drop=True, inplace=True)
+                except Exception:
+                    pass
+
+        if df is None or len(df.index) < 1:
+            try:
+                df = cls.__request_ohlcv_from_ftx(start_ut, end_ut, period_sec, symbol, request_interval)
+            except Exception:
+                pass
+
+        # 読み込んだcsvよりデータが増えている場合はcsv保存
+        ut = df['unixtime'].values
+        if len(df.index) > len_csv:
+            if ((csv_path is not None) and (len(csv_path) > 0)):
+                csv_dir = os.path.dirname(csv_path)
+                if not os.path.exists(csv_dir):
+                    os.makedirs(csv_dir)
+                df.to_csv(csv_path, header=True, index=False)
+                if progress_info:
+                    print(f'save csv: {ut[0]} - {ut[-1]} (len={len(ut)})')
+
+        if progress_info:
+            print(f'get  df : {ut[0]} - {ut[-1]} (len={len(ut)})')
+        return df
+
+    @classmethod
+    def __request_ohlcv_from_ftx(cls, start_ut, end_ut, period=60, symbol='BTC-PERP', request_interval=0.5):
+        url = f'https://ftx.com/api/markets/{symbol}/candles'
+        params = {
+            'resolution': period,
+            'limit': 5000,
+            'start_time': start_ut,
+            'end_time': end_ut,
+        }
+
+        df_temp = None
+        last_time = end_ut
+        retry_count = 0
+        while start_ut <= last_time:
+            try:
+                params['end_time'] = last_time
+                res = requests.get(url, params, timeout=10)
+                res.raise_for_status()
+                d = res.json()
+                try:
+                    if len(d['result']) == 0:
+                        break
+                    last_time -= (5000 - 1) * period
+                except IndexError:
+                    break
+                if df_temp is None:
+                    df_temp = pd.DataFrame(d['result'])
+                else:
+                    df_temp = pd.concat([pd.DataFrame(d['result']), df_temp])
+                time.sleep(request_interval)
+            except Exception as e:
+                print(f'Get ohlcv failed.(retry:{retry_count})\n{traceback.format_exc()}')
+                if retry_count > 5:
+                    raise e
+                retry_count += 1
+                time.sleep(2)
+                continue
+        # DataFrame生成
+        df_temp['unixtime'] = df_temp['time'] / 1000
+        df = df_temp[['unixtime', 'open', 'high', 'low', 'close', 'volume']].copy()
+        if len(df.index) > 0:
+            # unixtimeソート
+            df.sort_values(by='unixtime', ascending=True, inplace=True)
+            # 重複行削除
+            df.drop_duplicates(keep='first', subset='unixtime', inplace=True)
+            # 指定範囲フィルタリング
+            df = df[((df['unixtime'] >= start_ut) & (df['unixtime'] < end_ut))]
+            # indexリセット
+            df.reset_index(drop=True, inplace=True)
+
+        return df
+
+    #---------------------------------------------------------------------------
     # 約定履歴をOHLCVにリサンプリング
     #---------------------------------------------------------------------------
     # [params]
