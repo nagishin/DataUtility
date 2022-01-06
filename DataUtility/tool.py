@@ -115,7 +115,7 @@ class Tool(object):
 
     #---------------------------------------------------------------------------
     # BitMEX OHLCVを取得
-    # (取得件数:1440/requestとなるため, 大量取得時はRateLimit注意)
+    # (取得件数:10,000/requestとなるため, 大量取得時はRateLimit注意)
     #---------------------------------------------------------------------------
     # [params]
     #  start_ut / end_ut : UnixTimeで指定
@@ -130,7 +130,7 @@ class Tool(object):
     #  DataFrame columns=['unixtime', 'open', 'high', 'low', 'close', 'volume']
     #---------------------------------------------------------------------------
     @classmethod
-    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=0.5, progress_info:bool=True):
+    def get_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', csv_path=None, request_interval=1.0, progress_info:bool=True):
         # periodを分(int)に変換
         period = cls.__convert_period_to_min(period)
         df = None
@@ -195,7 +195,7 @@ class Tool(object):
         return df
 
     @classmethod
-    def __request_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', request_interval=0.5):
+    def __request_ohlcv_from_bitmex(cls, start_ut, end_ut, period=1, symbol='XBTUSD', request_interval=1.0):
         url = 'https://www.bitmex.com/api/udf/history'
         params = {
             'symbol': symbol,
@@ -204,7 +204,7 @@ class Tool(object):
 
         t=[]; o=[]; h=[]; l=[]; c=[]; v=[]
         cur_time = start_ut
-        add_time = period * 60 * 1440
+        add_time = period * 60 * 10000
         retry_count = 0
         while cur_time < end_ut:
             try:
